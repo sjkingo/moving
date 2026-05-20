@@ -83,6 +83,7 @@
     box-shadow: 0 0 0 2px rgba(34,197,94,0.18);
   }
   #presence .chip.idle .dot { background: #f59e0b; box-shadow: 0 0 0 2px rgba(245,158,11,0.18); }
+  #presence .chip.self { background: #e0e7ff; }
   #presence-label {
     font-size: 11px; color: #6b7280;
     background: rgba(255,255,255,0.7); padding: 3px 7px; border-radius: 12px;
@@ -1612,30 +1613,38 @@
     presenceEl.innerHTML = '';
     if (!presenceSelfEmail) { presenceEl.style.display = 'none'; return; }
     const now = Date.now();
-    const others = presenceState.filter(p => {
-      if (!p.email || p.email.toLowerCase() === presenceSelfEmail) return false;
-      const ms = p.lastSeen && p.lastSeen.toMillis ? p.lastSeen.toMillis() : 0;
-      return ms && (now - ms) < 60_000; // active in last 60s
-    });
-    if (others.length === 0) { presenceEl.style.display = 'none'; return; }
+    const active = presenceState
+      .filter(p => {
+        if (!p.email) return false;
+        const ms = p.lastSeen && p.lastSeen.toMillis ? p.lastSeen.toMillis() : 0;
+        return ms && (now - ms) < 60_000; // active in last 60s
+      })
+      // Put self first so the row order is stable across browsers
+      .sort((a, b) => {
+        const as = a.email.toLowerCase() === presenceSelfEmail ? 0 : 1;
+        const bs = b.email.toLowerCase() === presenceSelfEmail ? 0 : 1;
+        if (as !== bs) return as - bs;
+        return a.email.localeCompare(b.email);
+      });
+    if (active.length === 0) { presenceEl.style.display = 'none'; return; }
 
     const label = document.createElement('span');
     label.id = 'presence-label';
-    label.textContent = others.length + ' other online';
+    label.textContent = active.length + ' online';
     presenceEl.appendChild(label);
 
-    for (const p of others) {
+    for (const p of active) {
       const ageMs = now - (p.lastSeen && p.lastSeen.toMillis ? p.lastSeen.toMillis() : 0);
-      const isIdle = ageMs > 25_000;   // green if heartbeat in last 25s, amber otherwise
+      const isIdle = ageMs > 25_000;
+      const isSelf = p.email.toLowerCase() === presenceSelfEmail;
       const chip = document.createElement('span');
-      chip.className = 'chip' + (isIdle ? ' idle' : '');
+      chip.className = 'chip' + (isIdle ? ' idle' : '') + (isSelf ? ' self' : '');
       const dot = document.createElement('span');
       dot.className = 'dot';
       chip.appendChild(dot);
-      // Easter egg: heart for joanna
       const isJoanna = p.email.toLowerCase() === 'joannamary888@gmail.com';
       const text = document.createElement('span');
-      text.textContent = p.email + (isJoanna ? ' ❤️' : '');
+      text.textContent = p.email + (isSelf ? ' (you)' : '') + (isJoanna ? ' ❤️' : '');
       chip.appendChild(text);
       presenceEl.appendChild(chip);
     }
