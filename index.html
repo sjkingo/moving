@@ -659,6 +659,10 @@
       markers[key].forEach(m => map.removeLayer(m));
       markers[key] = [];
     }
+    // Tearing down markers also closes any open popup, but Leaflet doesn't
+    // always fire popupclose for removed layers — reset the counter so we
+    // don't deadlock the deferred-render guard.
+    openPopupCount = 0;
   }
 
   // Driving-distance cache (per-browser localStorage, unchanged from before)
@@ -924,10 +928,16 @@
         closeOnEscapeKey: true,
       });
       m.on('popupopen', () => {
+        openPopupCount++;
         attachPopupHandlers(popupEl, typeKey, item.id, m);
         if (opts.onPopupOpen) opts.onPopupOpen(item, i);
       });
-      if (opts.onPopupClose) m.on('popupclose', () => opts.onPopupClose(item, i));
+      m.on('popupclose', () => {
+        openPopupCount = Math.max(0, openPopupCount - 1);
+        if (opts.onPopupClose) opts.onPopupClose(item, i);
+        // If a snapshot landed while the popup was open, render now.
+        if (openPopupCount === 0 && renderDeferred) render();
+      });
       markers[t.collection].push(m);
       bounds.push([item.lat, item.lng]);
       allPointsForOverlay.push([item.lng, item.lat]);
@@ -935,7 +945,19 @@
     });
   }
 
+  // While a marker popup is open we defer the snapshot-triggered rebuild —
+  // otherwise typing in a field triggers an updateDoc → onSnapshot → render(),
+  // which clears markers including the one whose popup is open. The deferred
+  // render runs the moment the popup closes.
+  let openPopupCount = 0;
+  let renderDeferred = false;
+
   function render() {
+    if (openPopupCount > 0) {
+      renderDeferred = true;
+      return;
+    }
+    renderDeferred = false;
     clearMarkers();
     listingsSidebarItems = [];
     sidebarList.innerHTML = '';
