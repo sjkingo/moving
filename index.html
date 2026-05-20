@@ -289,6 +289,11 @@
   .listing-popup .field.beds input  { font-size: 12px; color: #666; padding-left: 0; }
   .listing-popup .field.url input   { font-size: 12px; color: #1a73e8; padding-left: 0; }
   .listing-popup .field .status { font-size: 10px; color: #888; min-height: 12px; }
+  .listing-popup .field label .field-url-link {
+    font-size: 13px; text-decoration: none; opacity: 0.7;
+    margin-left: 2px;
+  }
+  .listing-popup .field label .field-url-link:hover { opacity: 1; }
   .listing-popup .pin-actions { margin-top: 6px; display: flex; gap: 6px; }
   .listing-popup .pin-actions button {
     flex: 1; background: #f3f4f6; border: 1px solid #d1d5db;
@@ -770,6 +775,28 @@
     });
   }
 
+  // Coalesce edit events for the same (coll, docId, field). Multiple typing
+  // bursts within 5s collapse into a single event whose `newValue` is the
+  // latest value at flush time. Avoids spamming history when one keystroke
+  // session produces multiple debounced saves.
+  const _editEventPending = new Map(); // key -> { timer, name, value }
+  function logEditCoalesced(coll, docId, displayName, field, newValue, windowMs = 5000) {
+    const key = coll + '|' + docId + '|' + field;
+    const existing = _editEventPending.get(key);
+    if (existing) clearTimeout(existing.timer);
+    const flush = () => {
+      const entry = _editEventPending.get(key);
+      if (!entry) return;
+      _editEventPending.delete(key);
+      logEvent('edit', coll, docId, entry.name, field, entry.value);
+    };
+    _editEventPending.set(key, {
+      timer: setTimeout(flush, windowMs),
+      name: displayName,
+      value: newValue,
+    });
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Drag-and-drop reordering of sidebar listings
   //   Drag handle: the rank badge. Drop target: any sidebar <li>.
@@ -1087,7 +1114,7 @@
         const item = list.find(x => x.id === id);
         const typeKey = typeForCollection(coll);
         const name = item && typeKey ? docDisplayName(typeKey, item) : id;
-        logEvent('edit', coll, id, name, key, v);
+        logEditCoalesced(coll, id, name, key, v);
         statusEl.textContent = 'Saved';
         setTimeout(() => { if (statusEl.textContent === 'Saved') statusEl.textContent = ''; }, 1200);
       } catch (e) {
@@ -1141,6 +1168,20 @@
     } else {
       const label = document.createElement('label');
       label.textContent = field.label;
+      // URL fields get a small 🔗 next to the label that opens the link in a
+      // new tab. Hidden until the input has a value; updates live on edit.
+      if (field.key === 'url') {
+        const link = document.createElement('a');
+        link.className = 'field-url-link';
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.title = 'Open link';
+        link.textContent = ' 🔗';
+        link.style.display = value ? 'inline' : 'none';
+        link.href = value || '#';
+        label.appendChild(link);
+        wrap._urlLink = link;   // for the input handler below to update
+      }
       wrap.appendChild(label);
 
       const el = document.createElement(field.kind === 'textarea' ? 'textarea' : 'input');
@@ -1149,6 +1190,13 @@
       el.value = value || '';
       el.dataset.key = field.key;
       if (field.kind === 'input') el.type = 'text';
+      if (field.key === 'url' && wrap._urlLink) {
+        el.addEventListener('input', () => {
+          const v = el.value.trim();
+          if (v) { wrap._urlLink.href = v; wrap._urlLink.style.display = 'inline'; }
+          else   { wrap._urlLink.style.display = 'none'; }
+        });
+      }
       wrap.appendChild(el);
     }
 
