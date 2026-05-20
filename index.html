@@ -190,22 +190,19 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
 
-  /* Pulse ring shown on the marker DOM element while its sidebar row is hovered.
-     Uses a ::before so it works for both <img> markers and divIcon markers. */
-  .marker-pulse { position: relative; }
-  .marker-pulse::before {
-    content: ''; position: absolute;
-    left: 50%; top: 100%;     /* anchor near the bottom point of the marker */
-    width: 14px; height: 14px;
-    margin-left: -7px; margin-top: -7px;
-    border-radius: 50%; pointer-events: none;
+  /* Pulse ring — a dedicated layer that sits on the map pane, anchored to
+     the marker's latlng. Constructed as a separate Leaflet element so it
+     isn't constrained by the marker's <img> box. */
+  .marker-pulse-ring {
+    position: absolute; pointer-events: none;
+    width: 24px; height: 24px; margin-left: -12px; margin-top: -12px;
+    border-radius: 50%;
     background: rgba(26, 115, 232, 0.55);
-    animation: marker-pulse-anim 1.1s ease-out infinite;
-    z-index: -1;
+    animation: marker-pulse-anim 1.2s ease-out infinite;
   }
   @keyframes marker-pulse-anim {
-    0%   { transform: scale(0.7); opacity: 0.85; }
-    100% { transform: scale(3.2); opacity: 0;    }
+    0%   { transform: scale(0.6); opacity: 0.85; }
+    100% { transform: scale(3.5); opacity: 0;    }
   }
   #sidebar .loc { font-weight: 600; color: #222; margin-bottom: 2px; }
   #sidebar .meta { color: #666; font-size: 12px; margin-bottom: 2px; }
@@ -1239,22 +1236,33 @@
           map.setView([l.lat, l.lng], 13);
           m.openPopup();
         });
-        // Hover the sidebar row → show the matching marker's tooltip, pulse
-        // a ring around it, and bring it to the front. Skip while a popup
-        // is already open on this marker (the popup is a stronger visual).
+        // Hover the sidebar row → show the matching marker's tooltip, drop
+        // a pulsing ring on the map at the marker's location, and bring it
+        // to the front. Skip while a popup is already open on this marker.
+        let pulseLayer = null;
         li.addEventListener('mouseenter', () => {
           if (m.isPopupOpen && m.isPopupOpen()) return;
           m.setZIndexOffset(1000);
           m.openTooltip();
-          const el = m.getElement();
-          if (el) el.classList.add('marker-pulse');
+          if (!pulseLayer) {
+            pulseLayer = L.marker([l.lat, l.lng], {
+              icon: L.divIcon({
+                className: '',
+                html: '<div class="marker-pulse-ring"></div>',
+                iconSize: [0, 0],
+                iconAnchor: [0, 0],
+              }),
+              interactive: false,
+              keyboard: false,
+              zIndexOffset: -500,  // behind the real marker
+            }).addTo(map);
+          }
         });
         li.addEventListener('mouseleave', () => {
           if (m.isPopupOpen && m.isPopupOpen()) return;
-          m.setZIndexOffset(200);  // baseline for listings
+          m.setZIndexOffset(200);
           m.closeTooltip();
-          const el = m.getElement();
-          if (el) el.classList.remove('marker-pulse');
+          if (pulseLayer) { map.removeLayer(pulseLayer); pulseLayer = null; }
         });
         wireDragAndDrop(li);
         sidebarList.appendChild(li);
