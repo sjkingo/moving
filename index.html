@@ -125,7 +125,7 @@
   /* Sidebar */
   #sidebar {
     position: absolute; top: 12px; right: 12px; z-index: 1000;
-    width: 280px; max-height: calc(100vh - 24px); overflow-y: auto;
+    width: 340px; max-height: calc(100vh - 24px); overflow-y: auto;
     background: rgba(255, 255, 255, 0.96); border-radius: 6px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -143,9 +143,70 @@
   #sidebar.collapsed ul { display: none; }
   #sidebar .dist { color: #1a73e8; font-size: 12px; font-weight: 500; margin-bottom: 2px; }
   #sidebar ul { list-style: none; margin: 0; padding: 0; }
-  #sidebar li { padding: 8px 12px; border-bottom: 1px solid #eee; cursor: pointer; line-height: 1.35; }
+  #sidebar li {
+    padding: 8px 84px 8px 30px; border-bottom: 1px solid #eee;
+    cursor: pointer; line-height: 1.35; position: relative;
+    min-height: 64px;
+  }
+  #sidebar li .thumb {
+    position: absolute; top: 8px; right: 10px;
+    width: 70px; height: 56px; border-radius: 4px;
+    object-fit: cover; background: #e5e7eb;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  }
+  #sidebar li .thumb.placeholder {
+    background: repeating-linear-gradient(45deg, #f3f4f6, #f3f4f6 6px, #e5e7eb 6px, #e5e7eb 12px);
+  }
   #sidebar li:last-child { border-bottom: none; }
   #sidebar li:hover, #sidebar li.active { background: #e4ecf8; }
+  /* Rank badge / drag handle on the left of each sidebar entry */
+  #sidebar li .rank-handle {
+    position: absolute; left: 6px; top: 8px;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #1a73e8; color: white; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    cursor: grab; user-select: none;
+  }
+  #sidebar li .rank-handle.unranked { background: #d1d5db; color: #6b7280; font-size: 13px; font-weight: 600; }
+  #sidebar li .rank-handle:active { cursor: grabbing; }
+  #sidebar li.dragging { opacity: 0.5; }
+  #sidebar li.drop-above { box-shadow: inset 0 2px 0 #1a73e8; }
+  #sidebar li.drop-below { box-shadow: inset 0 -2px 0 #1a73e8; }
+
+  /* Ranked-listing map marker (Leaflet divIcon) */
+  .rank-marker {
+    background: transparent; border: none;
+  }
+  .rank-marker .pin {
+    width: 28px; height: 28px; border-radius: 50% 50% 50% 0;
+    background: #1a73e8; transform: rotate(-45deg);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    border: 2px solid white;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .rank-marker .pin span {
+    transform: rotate(45deg);
+    color: white; font-weight: 700; font-size: 13px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  /* Pulse ring shown on the marker DOM element while its sidebar row is hovered.
+     Uses a ::before so it works for both <img> markers and divIcon markers. */
+  .marker-pulse { position: relative; }
+  .marker-pulse::before {
+    content: ''; position: absolute;
+    left: 50%; top: 100%;     /* anchor near the bottom point of the marker */
+    width: 14px; height: 14px;
+    margin-left: -7px; margin-top: -7px;
+    border-radius: 50%; pointer-events: none;
+    background: rgba(26, 115, 232, 0.55);
+    animation: marker-pulse-anim 1.1s ease-out infinite;
+    z-index: -1;
+  }
+  @keyframes marker-pulse-anim {
+    0%   { transform: scale(0.7); opacity: 0.85; }
+    100% { transform: scale(3.2); opacity: 0;    }
+  }
   #sidebar .loc { font-weight: 600; color: #222; margin-bottom: 2px; }
   #sidebar .meta { color: #666; font-size: 12px; margin-bottom: 2px; }
   #sidebar .note-preview { color: #444; font-size: 12px; font-style: italic; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -549,6 +610,170 @@
   const yellowIcon = colorIcon('yellow');
   const violetIcon = colorIcon('violet');
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Listing rank — fractional indexes
+  //
+  // A listing's `rank` is a float. Sort ascending: lower number = higher pref.
+  // Unranked listings (no rank field) sort to the bottom in stable order.
+  // Inserting between two listings sets the new rank to the midpoint of the
+  // neighbours' ranks. Drift (1.5, 1.25, 1.375…) is fine; if any two adjacent
+  // listings end up < 1e-6 apart we rebalance the whole list to integers.
+  // ─────────────────────────────────────────────────────────────────────────
+  function sortListingsByRank(items) {
+    return items.slice().sort((a, b) => {
+      const ar = (typeof a.rank === 'number') ? a.rank : Infinity;
+      const br = (typeof b.rank === 'number') ? b.rank : Infinity;
+      if (ar !== br) return ar - br;
+      // Tie-breaker for unranked items: keep them in a stable order by id
+      return (a.id || '').localeCompare(b.id || '');
+    });
+  }
+
+  // Build a divIcon for a ranked listing showing its 1-indexed position.
+  // Unranked listings fall back to the default blue marker.
+  function rankedListingIcon(position) {
+    if (!position) return colorIcon('blue');
+    return L.divIcon({
+      className: 'rank-marker',
+      html: '<div class="pin"><span>' + position + '</span></div>',
+      iconSize: [28, 28],
+      iconAnchor: [14, 28],
+      popupAnchor: [0, -26],
+    });
+  }
+
+  // Detect rank drift and rebalance to integers (1, 2, 3, …) when adjacent
+  // ranks are too close. Best-effort; runs after drop. Doesn't reorder, just
+  // rewrites the numeric values.
+  async function maybeRebalanceRanks() {
+    const ranked = sortListingsByRank(state.listings).filter(l => typeof l.rank === 'number');
+    if (ranked.length < 2) return;
+    let needs = false;
+    for (let i = 1; i < ranked.length; i++) {
+      if (ranked[i].rank - ranked[i - 1].rank < 1e-6) { needs = true; break; }
+    }
+    if (!needs) return;
+    console.log('Rebalancing listing ranks…');
+    await Promise.all(ranked.map((l, i) =>
+      updateDoc(doc(db, 'listings', l.id), { rank: i + 1, updatedAt: serverTimestamp() })
+    ));
+  }
+
+  async function setListingRank(id, newRank) {
+    try {
+      await updateDoc(doc(db, 'listings', id), { rank: newRank, updatedAt: serverTimestamp() });
+    } catch (e) {
+      console.error('rank update failed', e);
+      alert('Rank update failed: ' + (e.code || e.message));
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Drag-and-drop reordering of sidebar listings
+  //   Drag handle: the rank badge. Drop target: any sidebar <li>.
+  //   On drop, compute the dragged listing's new rank as the midpoint of
+  //   the destination position's neighbours, then updateDoc. The snapshot
+  //   listener picks up the change and re-renders with the new order.
+  // ─────────────────────────────────────────────────────────────────────────
+  let dragSourceId = null;
+
+  function wireDragAndDrop(li) {
+    const handle = li.querySelector('.rank-handle');
+    if (!handle) return;
+
+    handle.addEventListener('dragstart', e => {
+      dragSourceId = li.dataset.id;
+      li.classList.add('dragging');
+      // Required for Firefox to actually start the drag
+      try { e.dataTransfer.setData('text/plain', li.dataset.id); } catch (_) {}
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    handle.addEventListener('dragend', () => {
+      li.classList.remove('dragging');
+      // Clear any leftover drop indicators
+      sidebarList.querySelectorAll('li').forEach(x => {
+        x.classList.remove('drop-above', 'drop-below');
+      });
+      dragSourceId = null;
+    });
+
+    // Track the "above-or-below" state on the li itself so dragleave events
+    // bubbling from child elements don't blow it away. We only clear on
+    // actual dragleave from the li (relatedTarget outside it).
+    li.addEventListener('dragover', e => {
+      if (!dragSourceId || li.dataset.id === dragSourceId) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = li.getBoundingClientRect();
+      const above = (e.clientY - rect.top) < rect.height / 2;
+      li.dataset.dropAbove = above ? '1' : '0';
+      li.classList.toggle('drop-above', above);
+      li.classList.toggle('drop-below', !above);
+    });
+    li.addEventListener('dragleave', e => {
+      // Only clear if the cursor actually left this li (not a child boundary)
+      if (!li.contains(e.relatedTarget)) {
+        li.classList.remove('drop-above', 'drop-below');
+        delete li.dataset.dropAbove;
+      }
+    });
+    li.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const srcId = dragSourceId;
+      const dstId = li.dataset.id;
+      const above = li.dataset.dropAbove === '1';
+      li.classList.remove('drop-above', 'drop-below');
+      delete li.dataset.dropAbove;
+      console.log('[rank] drop', { srcId, dstId, above });
+      if (!srcId || !dstId || srcId === dstId) {
+        console.warn('[rank] drop ignored — same or missing id', { srcId, dstId });
+        return;
+      }
+      const newRank = computeNewRank(srcId, dstId, above);
+      console.log('[rank] computed newRank =', newRank);
+      if (newRank == null) {
+        console.warn('[rank] computeNewRank returned null; aborting');
+        return;
+      }
+      try {
+        await setListingRank(srcId, newRank);
+        console.log('[rank] update OK');
+      } catch (e2) {
+        console.error('[rank] update failed', e2);
+      }
+      setTimeout(maybeRebalanceRanks, 500);
+    });
+  }
+
+  // Compute the dragged listing's new rank value given the drop position.
+  // - "above dstId" → midpoint between (rank above dstId) and dstId's rank
+  // - "below dstId" → midpoint between dstId's rank and (rank below dstId)
+  // Unranked items participate as "infinity" — dropping below an unranked
+  // becomes the last unranked-or-not slot, getting (last numeric rank + 1).
+  function computeNewRank(srcId, dstId, above) {
+    const sorted = state.listings;  // already sorted by rank
+    const dstIdx = sorted.findIndex(l => l.id === dstId);
+    if (dstIdx < 0) return null;
+
+    const targetIdx = above ? dstIdx : dstIdx + 1;
+    // targetIdx is the position where srcId is inserted; its neighbours are
+    // sorted[targetIdx - 1] (just above) and sorted[targetIdx] (just below).
+    // Filter out src itself if it's already adjacent.
+    const upper = (targetIdx - 1 >= 0 && sorted[targetIdx - 1].id !== srcId)
+      ? sorted[targetIdx - 1] : null;
+    const lower = (targetIdx < sorted.length && sorted[targetIdx].id !== srcId)
+      ? sorted[targetIdx] : null;
+
+    const upperRank = (upper && typeof upper.rank === 'number') ? upper.rank : null;
+    const lowerRank = (lower && typeof lower.rank === 'number') ? lower.rank : null;
+
+    if (upperRank == null && lowerRank == null) return 1;       // first ranked
+    if (upperRank == null) return lowerRank - 1;                // top of list
+    if (lowerRank == null) return upperRank + 1;                // bottom of ranked items
+    return (upperRank + lowerRank) / 2;                         // between two
+  }
+
   const placeholder = "data:image/svg+xml;utf8," + encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="150" viewBox="0 0 260 150">' +
     '<rect width="260" height="150" fill="#e5e7eb"/>' +
@@ -907,13 +1132,30 @@
   // Render markers + sidebar for one type using the shared TYPES schema.
   function renderTypeMarkers(typeKey, items, bounds, opts = {}) {
     const t = TYPES[typeKey];
-    const icon = colorIcon(t.iconColor);
+    const defaultIcon = colorIcon(t.iconColor);
+    // For listings, build a map from id -> 1-indexed rank position (only for
+    // listings with a numeric rank; unranked stay at the end and get no badge).
+    let listingPosition = {};
+    if (typeKey === 'listing') {
+      let pos = 0;
+      for (const it of items) {
+        if (typeof it.rank === 'number') { pos++; listingPosition[it.id] = pos; }
+      }
+    }
     items.forEach((item, i) => {
+      const icon = (typeKey === 'listing')
+        ? rankedListingIcon(listingPosition[item.id])
+        : defaultIcon;
       const m = L.marker([item.lat, item.lng], { icon }).addTo(map);
-      // Hover tooltip — "Type: name". Falls back to address/name if the
-      // designated nameKey is empty on this doc.
+      // Listings always sit above stays/schools so they're never obscured
+      // when icons overlap at lower zoom levels. Hover bumps further to 1000.
+      if (typeKey === 'listing') m.setZIndexOffset(200);
+      // Hover tooltip — "Type: name" (with rank prefix for ranked listings)
       const tooltipName = (item[t.nameKey] || item.name || item.address || '(unnamed)').trim();
-      m.bindTooltip(t.label + ': ' + tooltipName, {
+      const rankPrefix = (typeKey === 'listing' && listingPosition[item.id])
+        ? '#' + listingPosition[item.id] + ' · '
+        : '';
+      m.bindTooltip(rankPrefix + t.label + ': ' + tooltipName, {
         direction: 'top',
         offset: [0, -30],
         opacity: 0.95,
@@ -968,12 +1210,24 @@
     const bounds = [];
     allPointsForOverlay = [];
 
-    // Listings — also have a sidebar entry and driving-distance lookup
+    // Listings — sorted by rank (state.listings is already sorted). Compute
+    // 1-indexed ranked positions; unranked listings get a "—" badge.
+    let listingPos = 0;
     renderTypeMarkers('listing', state.listings, bounds, {
       onMarker: (l, i, m) => {
+        const isRanked = typeof l.rank === 'number';
+        if (isRanked) listingPos++;
+        const positionText = isRanked ? String(listingPos) : '—';
         const li = document.createElement('li');
+        li.dataset.id = l.id;
+        li.dataset.idx = String(i);
         const notePreview = l.notes ? '<div class="note-preview">📝 ' + escapeHtml(l.notes) + '</div>' : '';
+        const thumbHtml = l.photo
+          ? '<img class="thumb" src="' + escapeHtml(l.photo) + '" alt="" onerror="this.classList.add(\'placeholder\'); this.removeAttribute(\'src\');">'
+          : '<div class="thumb placeholder"></div>';
         li.innerHTML =
+          '<div class="rank-handle' + (isRanked ? '' : ' unranked') + '" draggable="true" title="Drag to reorder">' + positionText + '</div>' +
+          thumbHtml +
           '<div class="loc">' + escapeHtml(l.address || '') + '</div>' +
           '<div class="meta">' + escapeHtml(l.price || '') + ' · ' + escapeHtml(l.beds || '') + '</div>' +
           '<div class="dist" data-id="' + escapeHtml(l.id) + '">Driving distance: …</div>' +
@@ -981,9 +1235,28 @@
           notePreview;
         li.addEventListener('click', (e) => {
           if (e.target.tagName === 'A') return;
+          if (e.target.classList.contains('rank-handle')) return;
           map.setView([l.lat, l.lng], 13);
           m.openPopup();
         });
+        // Hover the sidebar row → show the matching marker's tooltip, pulse
+        // a ring around it, and bring it to the front. Skip while a popup
+        // is already open on this marker (the popup is a stronger visual).
+        li.addEventListener('mouseenter', () => {
+          if (m.isPopupOpen && m.isPopupOpen()) return;
+          m.setZIndexOffset(1000);
+          m.openTooltip();
+          const el = m.getElement();
+          if (el) el.classList.add('marker-pulse');
+        });
+        li.addEventListener('mouseleave', () => {
+          if (m.isPopupOpen && m.isPopupOpen()) return;
+          m.setZIndexOffset(200);  // baseline for listings
+          m.closeTooltip();
+          const el = m.getElement();
+          if (el) el.classList.remove('marker-pulse');
+        });
+        wireDragAndDrop(li);
         sidebarList.appendChild(li);
         listingsSidebarItems.push(li);
       },
@@ -1152,7 +1425,9 @@
       unsubs.push(onSnapshot(
         query(collection(db, coll), where('deleted', '==', false)),
         snap => {
-          state[stateKey] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          let items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          if (stateKey === 'listings') items = sortListingsByRank(items);
+          state[stateKey] = items;
           render();
         },
         err => console.error(coll + ' listener:', err)
