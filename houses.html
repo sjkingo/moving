@@ -1,0 +1,1464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>House shortlist — Spain</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""/>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; }
+  #map { width: 100vw; height: 100vh; }
+
+  /* Auth gate overlay */
+  #auth-gate {
+    position: fixed; inset: 0; z-index: 2000;
+    display: flex; align-items: center; justify-content: center;
+    background: #f5f7fa;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  #auth-gate .card {
+    background: white; padding: 32px 36px; border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    max-width: 380px; text-align: center;
+  }
+  #auth-gate h1 { margin: 0 0 8px 0; font-size: 20px; color: #222; }
+  #auth-gate p  { margin: 0 0 20px 0; font-size: 14px; color: #555; line-height: 1.45; }
+  #auth-gate button {
+    background: #1a73e8; color: white; border: none; padding: 10px 20px;
+    font-size: 14px; border-radius: 4px; cursor: pointer; font-weight: 500;
+  }
+  #auth-gate button:hover { background: #1666c9; }
+  #auth-gate button.secondary { background: #6b7280; margin-left: 8px; }
+  #auth-gate button.secondary:hover { background: #4b5563; }
+  #auth-gate .denied-email { font-family: ui-monospace, monospace; background: #f3f4f6; padding: 2px 6px; border-radius: 3px; }
+
+  /* Header user chip */
+  #user-chip {
+    position: absolute; top: 12px; left: 12px; z-index: 1000;
+    background: rgba(255,255,255,0.96); border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 12px; padding: 6px 10px; display: none;
+    align-items: center; gap: 8px;
+  }
+  #user-chip .email { color: #222; font-weight: 500; }
+  #user-chip button { background: none; border: none; color: #1a73e8; cursor: pointer; font-size: 12px; padding: 0; }
+  #user-chip button:hover { text-decoration: underline; }
+
+  /* Toolbar (Drop pin, Recently deleted) */
+  #toolbar {
+    position: absolute; bottom: 24px; left: 12px; z-index: 1000;
+    display: none; flex-direction: column; gap: 6px;
+  }
+  #toolbar button {
+    background: rgba(255,255,255,0.96); border: none; border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px; padding: 8px 12px; cursor: pointer; color: #222;
+    text-align: left;
+  }
+  #toolbar button:hover { background: #e4ecf8; }
+  #toolbar button.active { background: #1a73e8; color: white; }
+  body.pin-drop-mode #map { cursor: crosshair; }
+
+  /* Type chooser popover (anchored to "+ Add" button) */
+  #type-chooser {
+    position: absolute; bottom: 70px; left: 12px; z-index: 1100;
+    background: white; border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: none; flex-direction: column; min-width: 200px; overflow: hidden;
+  }
+  #type-chooser button {
+    background: white; border: none; border-bottom: 1px solid #f3f4f6;
+    padding: 10px 14px; font-size: 13px; cursor: pointer; text-align: left;
+    color: #222; display: flex; align-items: center; gap: 8px;
+  }
+  #type-chooser button:last-child { border-bottom: none; }
+  #type-chooser button:hover { background: #e4ecf8; }
+  #type-chooser .icon { font-size: 16px; }
+
+  /* Sidebar */
+  #sidebar {
+    position: absolute; top: 12px; right: 12px; z-index: 1000;
+    width: 280px; max-height: calc(100vh - 24px); overflow-y: auto;
+    background: rgba(255, 255, 255, 0.96); border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px; display: none;
+  }
+  #sidebar h2 {
+    margin: 0; padding: 10px 12px; font-size: 14px; background: #1a73e8; color: white;
+    border-radius: 6px 6px 0 0;
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; user-select: none;
+  }
+  #sidebar h2 .chev { transition: transform 0.2s; font-size: 12px; }
+  #sidebar.collapsed h2 { border-radius: 6px; }
+  #sidebar.collapsed h2 .chev { transform: rotate(-90deg); }
+  #sidebar.collapsed ul { display: none; }
+  #sidebar .dist { color: #1a73e8; font-size: 12px; font-weight: 500; margin-bottom: 2px; }
+  #sidebar .climate { color: #555; font-size: 12px; margin-bottom: 2px; }
+  #sidebar .climate .hot { color: #d93025; }
+  #sidebar .climate .cold { color: #1a73e8; }
+  #sidebar .climate .wet { color: #188038; }
+  #sidebar ul { list-style: none; margin: 0; padding: 0; }
+  #sidebar li { padding: 8px 12px; border-bottom: 1px solid #eee; cursor: pointer; line-height: 1.35; }
+  #sidebar li:last-child { border-bottom: none; }
+  #sidebar li:hover, #sidebar li.active { background: #e4ecf8; }
+  #sidebar .loc { font-weight: 600; color: #222; margin-bottom: 2px; }
+  #sidebar .meta { color: #666; font-size: 12px; margin-bottom: 2px; }
+  #sidebar .note-preview { color: #444; font-size: 12px; font-style: italic; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #sidebar a {
+    color: #1a73e8; text-decoration: none; font-size: 11px;
+    display: block; margin-top: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #sidebar a:hover { text-decoration: underline; }
+
+  /* Popups */
+  .listing-popup { width: 260px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  .listing-popup img { width: 100%; height: 150px; object-fit: cover; display: block; border-radius: 4px 4px 0 0; background: #eee; }
+  .listing-popup .body { padding: 8px 4px 4px 4px; }
+  .listing-popup .price { font-size: 18px; font-weight: 600; color: #1a73e8; margin: 0 0 4px 0; }
+  .listing-popup .addr { font-size: 13px; color: #333; margin: 0 0 4px 0; line-height: 1.3; }
+  .listing-popup .beds { font-size: 12px; color: #666; margin: 0 0 6px 0; }
+  .listing-popup .climate { font-size: 12px; color: #555; margin: 0 0 6px 0; padding: 6px 8px; background: #f5f7fa; border-radius: 4px; }
+  .listing-popup a { font-size: 12px; color: #1a73e8; text-decoration: none; word-break: break-all; }
+  .listing-popup a:hover { text-decoration: underline; }
+  .listing-popup .notes { margin-top: 8px; }
+  .listing-popup .notes label { display: block; font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 600; }
+  .listing-popup .notes textarea {
+    width: 100%; box-sizing: border-box; min-height: 60px;
+    font-family: inherit; font-size: 13px; padding: 6px 8px;
+    border: 1px solid #ddd; border-radius: 4px; resize: vertical;
+  }
+  .listing-popup .notes textarea:focus { border-color: #1a73e8; outline: none; }
+  .listing-popup .notes .status { font-size: 11px; color: #888; margin-top: 2px; min-height: 14px; }
+  /* Inline field editors — same look as notes but for single-line fields */
+  .listing-popup .field { margin-top: 6px; }
+  .listing-popup .field label {
+    display: block; font-size: 10px; color: #888; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 2px; font-weight: 600;
+  }
+  .listing-popup .field input, .listing-popup .field textarea {
+    width: 100%; box-sizing: border-box; font-family: inherit;
+    font-size: 13px; padding: 4px 6px;
+    border: 1px solid transparent; border-radius: 3px;
+    background: transparent; color: #222;
+  }
+  .listing-popup .field input:hover, .listing-popup .field textarea:hover {
+    border-color: #e5e7eb; background: #fafbfc;
+  }
+  .listing-popup .field input:focus, .listing-popup .field textarea:focus {
+    border-color: #1a73e8; background: white; outline: none;
+  }
+  .listing-popup .field.price input { font-size: 18px; font-weight: 600; color: #1a73e8; padding-left: 0; }
+  .listing-popup .field.addr input  { font-size: 13px; color: #333; padding-left: 0; }
+  .listing-popup .field.beds input  { font-size: 12px; color: #666; padding-left: 0; }
+  .listing-popup .field.climate input,
+  .listing-popup .field.climate textarea { font-size: 12px; color: #555; background: #f5f7fa; }
+  .listing-popup .field.cost input,
+  .listing-popup .field.cost textarea    { font-size: 12px; color: #555; background: #f5f7fa; }
+  .listing-popup .field.url input   { font-size: 12px; color: #1a73e8; padding-left: 0; }
+  .listing-popup .field .status { font-size: 10px; color: #888; min-height: 12px; }
+  .listing-popup .pin-actions { margin-top: 6px; display: flex; gap: 6px; }
+  .listing-popup .pin-actions button {
+    flex: 1; background: #f3f4f6; border: 1px solid #d1d5db;
+    border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer;
+    color: #374151;
+  }
+  .listing-popup .pin-actions button.danger { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+  .listing-popup .pin-actions button:hover { background: #e5e7eb; }
+  .listing-popup .pin-actions button.danger:hover { background: #fee2e2; }
+
+  /* Pin drop modal */
+  #pin-modal-backdrop {
+    position: fixed; inset: 0; z-index: 1500;
+    background: rgba(0,0,0,0.3); display: none;
+    align-items: center; justify-content: center;
+  }
+  #pin-modal {
+    background: white; padding: 20px 24px; border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2); width: 320px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  #pin-modal h3 { margin: 0 0 12px 0; font-size: 16px; }
+  #pin-modal label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; margin-top: 10px; font-weight: 500; }
+  #pin-modal input, #pin-modal textarea {
+    width: 100%; box-sizing: border-box; padding: 6px 8px;
+    border: 1px solid #ddd; border-radius: 4px; font-family: inherit; font-size: 13px;
+  }
+  #pin-modal textarea { min-height: 70px; resize: vertical; }
+  #pin-modal .actions { margin-top: 14px; display: flex; gap: 8px; justify-content: flex-end; }
+  #pin-modal button { padding: 7px 14px; font-size: 13px; border-radius: 4px; cursor: pointer; border: none; }
+  #pin-modal button.primary { background: #1a73e8; color: white; }
+  #pin-modal button.primary:disabled { background: #93b8ec; cursor: not-allowed; }
+  #pin-modal button.cancel { background: #e5e7eb; color: #374151; }
+  #pin-search-status { font-size: 12px; color: #888; margin-top: 4px; min-height: 16px; }
+  #pin-search-results {
+    list-style: none; margin: 6px 0 0 0; padding: 0;
+    max-height: 180px; overflow-y: auto;
+    border: 1px solid #eee; border-radius: 4px; display: none;
+  }
+  #pin-search-results.has-results { display: block; }
+  #pin-search-results li {
+    padding: 7px 10px; font-size: 13px; cursor: pointer;
+    border-bottom: 1px solid #f3f4f6; line-height: 1.35; color: #222;
+  }
+  #pin-search-results li:last-child { border-bottom: none; }
+  #pin-search-results li:hover, #pin-search-results li.selected { background: #e4ecf8; }
+  #pin-manual-details { margin-top: 12px; }
+  #pin-manual-details summary { font-size: 12px; color: #1a73e8; cursor: pointer; }
+  #pin-manual-details .latlng-row { display: flex; gap: 8px; margin-top: 6px; }
+  #pin-manual-details .latlng-row > div { flex: 1; }
+  #pin-location-summary {
+    margin-top: 10px; padding: 8px 10px; border-radius: 4px;
+    background: #f5f7fa; font-size: 12px; color: #555; line-height: 1.4;
+  }
+  #pin-location-summary.set { background: #e6f4ea; color: #1e7d32; }
+  #pin-map-click-row { margin-top: 8px; font-size: 12px; }
+  #pin-map-click-row a { color: #1a73e8; text-decoration: none; }
+  #pin-map-click-row a:hover { text-decoration: underline; }
+
+  /* Recently-deleted panel */
+  #trash-panel {
+    position: absolute; bottom: 24px; left: 200px; z-index: 1500;
+    width: 320px; max-height: 60vh; overflow-y: auto;
+    background: white; border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: none;
+  }
+  #trash-panel h3 {
+    margin: 0; padding: 10px 14px; font-size: 14px; background: #6b7280; color: white;
+    border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center;
+  }
+  #trash-panel h3 .close { cursor: pointer; }
+  #trash-panel ul { list-style: none; margin: 0; padding: 0; }
+  #trash-panel li { padding: 10px 14px; border-bottom: 1px solid #eee; font-size: 13px; }
+  #trash-panel li:last-child { border-bottom: none; }
+  #trash-panel li .title { font-weight: 500; color: #222; }
+  #trash-panel li .when { font-size: 11px; color: #888; margin: 2px 0 6px; }
+  #trash-panel li button { background: #1a73e8; color: white; border: none; border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+  #trash-panel li button:hover { background: #1666c9; }
+  #trash-panel .empty { padding: 16px; text-align: center; color: #888; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div id="auth-gate">
+  <div class="card" id="auth-gate-card">
+    <h1>House shortlist</h1>
+    <p>Sign in with Google to view and edit the shortlist.</p>
+    <button id="signin-btn">Sign in with Google</button>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<div id="user-chip">
+  <span class="email" id="user-email"></span>
+  <button id="signout-btn">Sign out</button>
+</div>
+
+<div id="toolbar">
+  <button id="add-btn">➕ Add</button>
+  <button id="trash-btn">🗑 Recently deleted (<span id="trash-count">0</span>)</button>
+</div>
+
+<div id="type-chooser">
+  <button data-type="listing"><span class="icon">🏠</span> Listing</button>
+  <button data-type="stay"><span class="icon">🛏️</span> Temporary stay</button>
+  <button data-type="school"><span class="icon">🎓</span> School</button>
+</div>
+
+<div id="sidebar">
+  <h2 id="sidebar-toggle"><span id="sidebar-title">Listings (0)</span><span class="chev">▼</span></h2>
+  <ul id="sidebar-list"></ul>
+</div>
+
+<div id="pin-modal-backdrop">
+  <div id="pin-modal">
+    <h3 id="pin-modal-title">Add</h3>
+
+    <label for="pin-search">Search address or town</label>
+    <input id="pin-search" type="text" placeholder="e.g. Ronda, Málaga, Spain" autocomplete="off">
+    <div id="pin-search-status"></div>
+    <ul id="pin-search-results"></ul>
+
+    <details id="pin-manual-details">
+      <summary>Or enter coordinates manually</summary>
+      <div class="latlng-row">
+        <div>
+          <label for="pin-lat">Latitude</label>
+          <input id="pin-lat" type="number" step="any" placeholder="36.7497">
+        </div>
+        <div>
+          <label for="pin-lng">Longitude</label>
+          <input id="pin-lng" type="number" step="any" placeholder="-5.8086">
+        </div>
+      </div>
+    </details>
+
+    <div id="pin-location-summary">No location selected yet.</div>
+    <div id="pin-map-click-row"><a href="#" id="pin-map-click-link">Or click on the map to choose a location</a></div>
+
+    <div id="pin-type-fields"></div>
+
+    <div class="actions">
+      <button class="cancel" id="pin-cancel">Cancel</button>
+      <button class="primary" id="pin-save" disabled>Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="trash-panel">
+  <h3>Recently deleted <span class="close" id="trash-close">×</span></h3>
+  <ul id="trash-list"></ul>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+  import {
+    getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
+  import {
+    getFirestore, collection, doc, onSnapshot,
+    setDoc, updateDoc, serverTimestamp, query, where, getDocs, getDoc
+  } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Configuration — paste values from the Firebase console after setup.
+  // ─────────────────────────────────────────────────────────────────────────
+  const FIREBASE_CONFIG = {
+    projectId: "moving-496909",
+    appId: "1:571309389087:web:43b972bd1e4dfb4b65ec2a",
+    storageBucket: "moving-496909.firebasestorage.app",
+    apiKey: "AIzaSyCM2b2k4QC5xYsj9D1zfJ-ukcX5LlrFlIw",
+    authDomain: "moving-496909.firebaseapp.com",
+    messagingSenderId: "571309389087",
+    measurementId: "G-17QX7T3KQK",
+    projectNumber: "571309389087",
+    version: "2"
+  };
+
+  // Keep in sync with the email list in your Firestore security rules.
+  // This is only a UI-side gate; rules are the actual security boundary.
+  const ALLOWED_EMAILS = [
+    "sjkingo88@gmail.com",
+    "joannamary888@gmail.com"
+  ];
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Seed data — used once on first signed-in load to populate Firestore.
+  // After that, all reads come from onSnapshot listeners, not these arrays.
+  // ─────────────────────────────────────────────────────────────────────────
+  const SEED_LISTINGS = [
+    { address: "Antequera, Málaga, Andalucía, España", lat: 37.0194, lng: -4.5614, price: "€1,700", beds: "5 bed, 20 acres",
+      url: "https://fyahomes.com/property/finca-independiente-de-alquiler-larga-temporada-naturaleza-privacidad-y-amplitud/",
+      photo: "https://fyahomes.com/wp-content/uploads/2026/04/5-1240x720.jpg",
+      climate: "☀️ Jul 35°C · ❄️ Jan 5°C · 🌧️ 457mm/yr (dry, hot summer)",
+      cost: "💶 ~14% below Madrid (groceries -13%, eating out -7%) — proxy: Málaga" },
+    { address: "Vigo, Spain", lat: 42.2406, lng: -8.7207, price: "€1,800", beds: "5 bed",
+      url: "https://www.properstar.com.au/listing/115915016?utm_source=notifications&utm_medium=email&utm_campaign=lead_listing_confirmation",
+      photo: "photos/vigo.png",
+      climate: "☀️ Jul 27°C · ❄️ Jan 7°C · 🌧️ 1968mm/yr (very wet, mild)",
+      cost: "💶 ~12% below Madrid (groceries -10%, utilities -14%, eating out -14%)" },
+    { address: "Ador, Spain", lat: 38.9183, lng: -0.1431, price: "€1,700", beds: "5 beds",
+      url: "https://www.properstar.com.au/listing/116744839?searchId=1224356054&utm_source=emailalerts&utm_medium=email&utm_campaign=search-alert",
+      photo: "photos/ador.png",
+      climate: "☀️ Jul 31°C · ❄️ Jan 9°C · 🌧️ 570mm/yr (Mediterranean)",
+      cost: "💶 ~15% below Madrid (groceries -18%, utilities -17%) — proxy: Valencia" },
+    { address: "Calle la Iglesia 10, Lucillo, Spain", lat: 42.4878, lng: -6.2236, price: "€1,200", beds: "5 beds",
+      url: "https://www.idealista.com/inmueble/106936339", photo: "photos/lucillo.png",
+      climate: "☀️ Jul 26°C · ❄️ Jan 0°C · 🌧️ 727mm/yr (cold winters, mountain)",
+      cost: "💶 ~25% below Madrid (groceries -16%, eating out -19%) — cheapest of the lot" },
+    { address: "Tabagón, Spain", lat: 41.9300, lng: -8.7800, price: "€1,500", beds: "7 beds",
+      url: "https://www.idealista.com/inmueble/109594069", photo: "photos/tabagon.png",
+      climate: "☀️ Jul 25°C · ❄️ Jan 7°C · 🌧️ 2129mm/yr (very wet, mild)",
+      cost: "💶 ~15% below Madrid (groceries -11%, utilities -14%, eating out -15%)" },
+    { address: "Calle Pintor Valdez Leal, Arcos de la Frontera, Spain", lat: 36.7497, lng: -5.8086, price: "€1,500", beds: "5 beds",
+      url: "https://www.idealista.com/inmueble/101292714/", photo: "photos/arcos.png",
+      climate: "☀️ Jul 36°C · ❄️ Jan 8°C · 🌧️ 597mm/yr (hot Andalusian)",
+      cost: "💶 ~17% below Madrid (groceries -19%, eating out -15%) — proxy: Cádiz" },
+    { address: "Calle José Montes 36, Arriate, Serranía de Ronda, Málaga", lat: 36.6634, lng: -5.1378, price: "€1,500", beds: "5 bed",
+      url: "https://www.idealista.com/en/inmueble/110106968", photo: "photos/arriate.png",
+      climate: "☀️ Jul 31°C · ❄️ Jan 4°C · 🌧️ 714mm/yr (mountain Andalusian)" }
+  ];
+
+  const SEED_STAYS = [
+    { name: "Airbnb — temporary stay",
+      address: "C. del Castillo, 7, 05130 Villaviciosa, Ávila, Spain",
+      lat: 40.5483, lng: -4.9039, photo: "photos/airbnb_villaviciosa.png" }
+  ];
+
+  const SEED_SCHOOLS = [
+    { name: "O Castro British International School",
+      address: "Camiño de San Cosme, 1, 36419 San Pedro De Cela, Pontevedra, Spain",
+      lat: 42.160488594338894, lng: -8.670382726989063,
+      curriculum: "British", url: "https://ocastro.britishinternationalschool.com",
+      drive: "13 min from Vigo" },
+    { name: "The British School of Málaga", address: "Málaga", lat: 36.7338, lng: -4.4544, curriculum: "British", url: "https://www.britishschoolmalaga.com", drive: "41 min from Antequera" },
+    { name: "El Altillo International School", address: "Jerez de la Frontera, Cádiz", lat: 36.6953, lng: -6.1115, curriculum: "IB", url: "https://www.altillointernational.com", drive: "27 min from Arcos" },
+    { name: "Sage College Jerez", address: "Jerez de la Frontera, Cádiz", lat: 36.6906, lng: -6.1245, curriculum: "British", url: "https://sagecollege.es", drive: "30 min from Arcos" },
+    { name: "SEK International School Atlántico", address: "Poio, Pontevedra", lat: 42.4422, lng: -8.6843, curriculum: "IB", url: "https://atlantico.sek.es", drive: "29 min from Vigo" },
+    { name: "Eleven School", address: "Matamá, Vigo", lat: 42.2095, lng: -8.7676, curriculum: "British/Montessori", url: "https://elevenschool.com", drive: "13 min from Vigo" },
+    { name: "British School Gandia", address: "Gandia, Valencia", lat: 38.9706, lng: -0.1814, curriculum: "British", url: "https://www.bsgandia.com", drive: "16 min from Ador" }
+  ];
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Firebase init
+  // ─────────────────────────────────────────────────────────────────────────
+  const app  = initializeApp(FIREBASE_CONFIG);
+  const auth = getAuth(app);
+  const db   = getFirestore(app);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Slug + ID helpers — deterministic so seeded docs always land at the same path
+  // ─────────────────────────────────────────────────────────────────────────
+  function slugify(s) {
+    return s.toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')   // strip accents
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80);
+  }
+  const listingId = (l) => slugify(l.address);
+  const stayId    = (s) => slugify(s.name);
+  const schoolId  = (s) => slugify(s.name);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // DOM refs
+  // ─────────────────────────────────────────────────────────────────────────
+  const authGate    = document.getElementById('auth-gate');
+  const authCard    = document.getElementById('auth-gate-card');
+  const userChip    = document.getElementById('user-chip');
+  const userEmailEl = document.getElementById('user-email');
+  const sidebarEl   = document.getElementById('sidebar');
+  const sidebarList = document.getElementById('sidebar-list');
+  const sidebarTitle= document.getElementById('sidebar-title');
+  const toolbar     = document.getElementById('toolbar');
+  const addBtn      = document.getElementById('add-btn');
+  const typeChooser = document.getElementById('type-chooser');
+  const trashBtn    = document.getElementById('trash-btn');
+  const trashCountEl= document.getElementById('trash-count');
+  const trashPanel  = document.getElementById('trash-panel');
+  const trashList   = document.getElementById('trash-list');
+  const pinModalBd  = document.getElementById('pin-modal-backdrop');
+  const pinModalTitle  = document.getElementById('pin-modal-title');
+  const pinTypeFields  = document.getElementById('pin-type-fields');
+  const pinSearchIn = document.getElementById('pin-search');
+  const pinSearchStatus  = document.getElementById('pin-search-status');
+  const pinSearchResults = document.getElementById('pin-search-results');
+  const pinLatIn    = document.getElementById('pin-lat');
+  const pinLngIn    = document.getElementById('pin-lng');
+  const pinSummary  = document.getElementById('pin-location-summary');
+  const pinSaveBtn  = document.getElementById('pin-save');
+
+  document.getElementById('signin-btn').addEventListener('click', () => {
+    signInWithPopup(auth, new GoogleAuthProvider()).catch(err => {
+      console.error('Sign-in failed:', err);
+      alert('Sign-in failed: ' + err.message);
+    });
+  });
+  document.getElementById('signout-btn').addEventListener('click', () => signOut(auth));
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Map (created up-front but kept hidden under the auth gate until we render)
+  // ─────────────────────────────────────────────────────────────────────────
+  const map = L.map('map');
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    maxZoom: 20,
+    subdomains: 'abcd',
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>'
+  }).addTo(map);
+  // Default view so the map isn't blank if auth-gated user lands here before signing in
+  map.setView([40.0, -4.0], 6);
+
+  const colorIcon = (color) => new L.Icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-' + color + '.png',
+    iconRetinaUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-' + color + '.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+  });
+  // Backwards-compat: keep these defined so existing references during the
+  // refactor still resolve. TYPES.iconColor drives marker icons going forward.
+  const yellowIcon = colorIcon('yellow');
+  const violetIcon = colorIcon('violet');
+
+  const placeholder = "data:image/svg+xml;utf8," + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="150" viewBox="0 0 260 150">' +
+    '<rect width="260" height="150" fill="#e5e7eb"/>' +
+    '<text x="130" y="80" font-family="sans-serif" font-size="13" fill="#6b7280" text-anchor="middle">Photo unavailable — open listing</text>' +
+    '</svg>'
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Province overlay (unchanged from before — runs once, not auth-gated since
+  // it only reads a public GeoJSON file)
+  // ─────────────────────────────────────────────────────────────────────────
+  let allPointsForOverlay = [];
+  function pointInRing(pt, ring) {
+    const [x, y] = pt;
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0], yi = ring[i][1];
+      const xj = ring[j][0], yj = ring[j][1];
+      const intersect = ((yi > y) !== (yj > y)) &&
+        (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function pointInFeature(pt, feature) {
+    const g = feature.geometry;
+    const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+    for (const poly of polys) {
+      if (!pointInRing(pt, poly[0])) continue;
+      let inHole = false;
+      for (let h = 1; h < poly.length; h++) {
+        if (pointInRing(pt, poly[h])) { inHole = true; break; }
+      }
+      if (!inHole) return true;
+    }
+    return false;
+  }
+
+  let provinceGeojson = null;
+  let provinceLayer = null;
+  let worldMaskLayer = null;
+  fetch('https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/spain-provinces.geojson')
+    .then(r => r.json())
+    .then(gj => { provinceGeojson = gj; renderProvinceOverlay(); })
+    .catch(err => console.warn('province overlay failed:', err));
+
+  function renderProvinceOverlay() {
+    if (!provinceGeojson || allPointsForOverlay.length === 0) return;
+    if (worldMaskLayer) { map.removeLayer(worldMaskLayer); worldMaskLayer = null; }
+    if (provinceLayer)  { map.removeLayer(provinceLayer);  provinceLayer  = null; }
+
+    const worldRing = [[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]];
+    const holes = [];
+    for (const feat of provinceGeojson.features) {
+      const g = feat.geometry;
+      const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+      for (const poly of polys) holes.push(poly[0]);
+    }
+    worldMaskLayer = L.polygon(
+      [worldRing, ...holes].map(ring => ring.map(([lng, lat]) => [lat, lng])),
+      { stroke: false, fillColor: '#000', fillOpacity: 0.06, interactive: false }
+    ).addTo(map);
+
+    const matched = provinceGeojson.features.filter(f =>
+      allPointsForOverlay.some(pt => pointInFeature(pt, f))
+    );
+    provinceLayer = L.geoJSON({ type: 'FeatureCollection', features: matched }, {
+      style: { color: '#1a73e8', weight: 1.5, opacity: 0.8, fillColor: '#1a73e8', fillOpacity: 0.08 },
+      onEachFeature: (feat, layer) => {
+        layer.bindTooltip(feat.properties.name, { sticky: true, direction: 'top' });
+        layer.on({
+          mouseover: e => e.target.setStyle({ weight: 2.5, fillOpacity: 0.18 }),
+          mouseout:  e => e.target.setStyle({ weight: 1.5, fillOpacity: 0.08 })
+        });
+      }
+    }).addTo(map);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Live state (populated by onSnapshot listeners) + render loop
+  // ─────────────────────────────────────────────────────────────────────────
+  const state = {
+    listings: [],     // deleted !== true
+    stays: [],
+    schools: [],
+    // Combined "recently deleted" across all 3 types, with .type field on each
+    deleted: [],
+  };
+  const markers = { listings: [], stays: [], schools: [] };
+  let didInitialFit = false;
+  let listingsSidebarItems = [];
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    })[c]);
+  }
+
+  function clearMarkers() {
+    for (const key of Object.keys(markers)) {
+      markers[key].forEach(m => map.removeLayer(m));
+      markers[key] = [];
+    }
+  }
+
+  // Driving-distance cache (per-browser localStorage, unchanged from before)
+  function airbnb() { return state.stays[0]; }
+  const cacheKey = (l) => airbnb()
+    ? 'dist:' + airbnb().lat + ',' + airbnb().lng + '->' + l.lat + ',' + l.lng
+    : null;
+  async function fetchDistance(l) {
+    const a = airbnb();
+    if (!a) return null;
+    const key = cacheKey(l);
+    const cached = localStorage.getItem(key);
+    if (cached) return JSON.parse(cached);
+    const url = `https://router.project-osrm.org/route/v1/driving/${a.lng},${a.lat};${l.lng},${l.lat}?overview=false`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('OSRM ' + r.status);
+    const data = await r.json();
+    const route = data.routes && data.routes[0];
+    if (!route) throw new Error('no route');
+    const out = { km: route.distance / 1000, hours: route.duration / 3600 };
+    localStorage.setItem(key, JSON.stringify(out));
+    return out;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Schema per type:
+  //   collection — Firestore collection name
+  //   label      — singular human label ("Listing")
+  //   icon       — Leaflet marker icon
+  //   fields     — ordered list of editable fields displayed in the popup.
+  //                Each: { key, label, kind, cssClass?, placeholder? }
+  //                kind: 'input' (single line) | 'textarea' | 'photo' (image preview + url)
+  //   addRequired— minimal fields the Add modal demands before Save enables
+  // ─────────────────────────────────────────────────────────────────────────
+  const TYPES = {
+    listing: {
+      collection: 'listings',
+      label: 'Listing',
+      iconColor: 'blue',
+      fields: [
+        { key: 'photo',   label: 'Photo URL', kind: 'photo',   cssClass: 'photo',   placeholder: 'https://… (or photos/foo.png)' },
+        { key: 'price',   label: 'Price',     kind: 'input',   cssClass: 'price',   placeholder: '€1,500' },
+        { key: 'address', label: 'Address',   kind: 'input',   cssClass: 'addr',    placeholder: 'Town, region, country' },
+        { key: 'beds',    label: 'Beds',      kind: 'input',   cssClass: 'beds',    placeholder: '5 bed, 1 ha' },
+        { key: 'climate', label: 'Climate',   kind: 'textarea',cssClass: 'climate', placeholder: '☀️ Jul 30°C · ❄️ Jan 5°C · 🌧️ 600mm/yr' },
+        { key: 'cost',    label: 'Cost note', kind: 'textarea',cssClass: 'cost',    placeholder: '💶 ~15% below Madrid…' },
+        { key: 'url',     label: 'Listing URL', kind: 'input', cssClass: 'url',     placeholder: 'https://…' },
+        { key: 'notes',   label: 'Notes',     kind: 'textarea',cssClass: 'notes',   placeholder: 'Add a note…' },
+      ],
+      addRequired: ['price', 'address'],
+    },
+    stay: {
+      collection: 'stays',
+      label: 'Temporary stay',
+      iconColor: 'violet',
+      fields: [
+        { key: 'photo',   label: 'Photo URL', kind: 'photo',   cssClass: 'photo',   placeholder: 'https://… (or photos/foo.png)' },
+        { key: 'name',    label: 'Name',      kind: 'input',   cssClass: 'price',   placeholder: 'Airbnb — temporary stay' },
+        { key: 'address', label: 'Address',   kind: 'input',   cssClass: 'addr',    placeholder: 'Town, region, country' },
+        { key: 'notes',   label: 'Notes',     kind: 'textarea',cssClass: 'notes',   placeholder: 'Add a note…' },
+      ],
+      addRequired: ['name'],
+    },
+    school: {
+      collection: 'schools',
+      label: 'School',
+      iconColor: 'yellow',
+      fields: [
+        { key: 'name',       label: 'Name',       kind: 'input',   cssClass: 'price',   placeholder: 'O Castro British International School' },
+        { key: 'address',    label: 'Address',    kind: 'input',   cssClass: 'addr',    placeholder: 'Town, region, country' },
+        { key: 'curriculum', label: 'Curriculum', kind: 'input',   cssClass: 'beds',    placeholder: 'British / IB / Montessori' },
+        { key: 'drive',      label: 'Driving',    kind: 'input',   cssClass: 'beds',    placeholder: '13 min from Vigo' },
+        { key: 'url',        label: 'URL',        kind: 'input',   cssClass: 'url',     placeholder: 'https://…' },
+        { key: 'notes',      label: 'Notes',      kind: 'textarea',cssClass: 'notes',   placeholder: 'Add a note…' },
+      ],
+      addRequired: ['name'],
+    },
+  };
+
+  // Look up the type from a collection name (used by trash panel etc.)
+  function typeForCollection(coll) {
+    for (const t in TYPES) if (TYPES[t].collection === coll) return t;
+    return null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Inline field editor — debounced write to Firestore on input/blur.
+  // Works for any single field on any collection/doc.
+  // ─────────────────────────────────────────────────────────────────────────
+  function bindFieldEditor(inputEl, statusEl, coll, id, key) {
+    let timer = null;
+    let lastSaved = inputEl.value;
+    const save = async () => {
+      const v = inputEl.value;
+      if (v === lastSaved) return;
+      statusEl.textContent = 'Saving…';
+      try {
+        await updateDoc(doc(db, coll, id), { [key]: v, updatedAt: serverTimestamp() });
+        lastSaved = v;
+        statusEl.textContent = 'Saved';
+        setTimeout(() => { if (statusEl.textContent === 'Saved') statusEl.textContent = ''; }, 1200);
+      } catch (e) {
+        console.error('field save failed', { key, error: e });
+        statusEl.textContent = 'Save failed: ' + (e.code || e.message);
+      }
+    };
+    inputEl.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(save, 600);
+    });
+    inputEl.addEventListener('blur', () => { clearTimeout(timer); save(); });
+  }
+
+  // Render one editable field as DOM (input or textarea + status line)
+  function buildFieldNode(field, value) {
+    const wrap = document.createElement('div');
+    wrap.className = 'field ' + (field.cssClass || '');
+
+    if (field.kind === 'photo') {
+      // Photo: small preview + URL input
+      const img = document.createElement('img');
+      img.style.width = '100%';
+      img.style.height = '150px';
+      img.style.objectFit = 'cover';
+      img.style.borderRadius = '4px';
+      img.style.background = '#eee';
+      img.alt = 'Photo';
+      img.src = value || placeholder;
+      img.onerror = () => { img.src = placeholder; };
+      wrap.appendChild(img);
+
+      const label = document.createElement('label');
+      label.textContent = field.label;
+      wrap.appendChild(label);
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'field-input';
+      input.placeholder = field.placeholder || '';
+      input.value = value || '';
+      input.dataset.key = field.key;
+      input.addEventListener('input', () => {
+        // Live preview while typing — but don't replace until user pauses
+        clearTimeout(input._previewTimer);
+        input._previewTimer = setTimeout(() => {
+          img.src = input.value || placeholder;
+        }, 400);
+      });
+      wrap.appendChild(input);
+    } else {
+      const label = document.createElement('label');
+      label.textContent = field.label;
+      wrap.appendChild(label);
+
+      const el = document.createElement(field.kind === 'textarea' ? 'textarea' : 'input');
+      el.className = 'field-input';
+      el.placeholder = field.placeholder || '';
+      el.value = value || '';
+      el.dataset.key = field.key;
+      if (field.kind === 'input') el.type = 'text';
+      wrap.appendChild(el);
+    }
+
+    const status = document.createElement('div');
+    status.className = 'status';
+    wrap.appendChild(status);
+
+    return wrap;
+  }
+
+  // Build the entire popup DOM for a doc of a given type
+  function buildPopupNode(typeKey, item) {
+    const t = TYPES[typeKey];
+    const wrap = document.createElement('div');
+    wrap.className = 'listing-popup';
+    const body = document.createElement('div');
+    body.className = 'body';
+    wrap.appendChild(body);
+
+    for (const f of t.fields) {
+      body.appendChild(buildFieldNode(f, item[f.key]));
+    }
+
+    // Delete (soft) button — every type gets one now
+    const actions = document.createElement('div');
+    actions.className = 'pin-actions';
+    const delBtn = document.createElement('button');
+    delBtn.className = 'danger doc-delete';
+    delBtn.textContent = 'Delete';
+    actions.appendChild(delBtn);
+    body.appendChild(actions);
+
+    return wrap;
+  }
+
+  // Attach field-editor bindings + delete handler after the popup is in the DOM
+  function attachPopupHandlers(popupNode, typeKey, id) {
+    const t = TYPES[typeKey];
+    popupNode.querySelectorAll('.field').forEach(wrap => {
+      const input  = wrap.querySelector('.field-input');
+      const status = wrap.querySelector('.status');
+      if (input && status && input.dataset.key) {
+        bindFieldEditor(input, status, t.collection, id, input.dataset.key);
+      }
+    });
+    const delBtn = popupNode.querySelector('.doc-delete');
+    if (delBtn) {
+      delBtn.addEventListener('click', async () => {
+        if (!confirm('Delete this ' + t.label.toLowerCase() + '? You can restore it from "Recently deleted".')) return;
+        try {
+          await updateDoc(doc(db, t.collection, id), {
+            deleted: true,
+            deletedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        } catch (e) {
+          console.error('soft-delete failed', e);
+          alert('Delete failed: ' + (e.code || e.message));
+        }
+      });
+    }
+  }
+
+  // Render markers + sidebar for one type using the shared TYPES schema.
+  function renderTypeMarkers(typeKey, items, bounds, opts = {}) {
+    const t = TYPES[typeKey];
+    const icon = colorIcon(t.iconColor);
+    items.forEach((item, i) => {
+      const m = L.marker([item.lat, item.lng], { icon }).addTo(map);
+      const popupEl = buildPopupNode(typeKey, item);
+      m.bindPopup(popupEl, { maxWidth: 280 });
+      m.on('popupopen', () => {
+        attachPopupHandlers(popupEl, typeKey, item.id);
+        if (opts.onPopupOpen) opts.onPopupOpen(item, i);
+      });
+      if (opts.onPopupClose) m.on('popupclose', () => opts.onPopupClose(item, i));
+      markers[t.collection].push(m);
+      bounds.push([item.lat, item.lng]);
+      allPointsForOverlay.push([item.lng, item.lat]);
+      if (opts.onMarker) opts.onMarker(item, i, m);
+    });
+  }
+
+  function render() {
+    clearMarkers();
+    listingsSidebarItems = [];
+    sidebarList.innerHTML = '';
+    sidebarTitle.textContent = 'Listings (' + state.listings.length + ')';
+
+    const bounds = [];
+    allPointsForOverlay = [];
+
+    // Listings — also have a sidebar entry and driving-distance lookup
+    renderTypeMarkers('listing', state.listings, bounds, {
+      onMarker: (l, i, m) => {
+        const li = document.createElement('li');
+        const notePreview = l.notes ? '<div class="note-preview">📝 ' + escapeHtml(l.notes) + '</div>' : '';
+        li.innerHTML =
+          '<div class="loc">' + escapeHtml(l.address || '') + '</div>' +
+          '<div class="meta">' + escapeHtml(l.price || '') + ' · ' + escapeHtml(l.beds || '') + '</div>' +
+          '<div class="dist" data-id="' + escapeHtml(l.id) + '">Driving distance: …</div>' +
+          (l.climate ? '<div class="climate">' + escapeHtml(l.climate) + '</div>' : '') +
+          (l.url ? '<a href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener">' + escapeHtml(l.url) + '</a>' : '') +
+          notePreview;
+        li.addEventListener('click', (e) => {
+          if (e.target.tagName === 'A') return;
+          map.setView([l.lat, l.lng], 13);
+          m.openPopup();
+        });
+        sidebarList.appendChild(li);
+        listingsSidebarItems.push(li);
+      },
+      onPopupOpen: (_l, i) => {
+        listingsSidebarItems.forEach(x => x.classList.remove('active'));
+        if (listingsSidebarItems[i]) {
+          listingsSidebarItems[i].classList.add('active');
+          listingsSidebarItems[i].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+      },
+      onPopupClose: (_l, i) => {
+        if (listingsSidebarItems[i]) listingsSidebarItems[i].classList.remove('active');
+      },
+    });
+
+    renderTypeMarkers('stay',   state.stays,   bounds);
+    renderTypeMarkers('school', state.schools, bounds);
+
+    if (!didInitialFit && bounds.length > 0) {
+      map.fitBounds(bounds, { padding: [40, 40] });
+      didInitialFit = true;
+    }
+
+    renderProvinceOverlay();
+    renderTrashPanel();
+    refreshDistances();
+  }
+
+  function renderTrashPanel() {
+    const n = state.deleted.length;
+    trashCountEl.textContent = String(n);
+    trashList.innerHTML = '';
+    if (n === 0) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'No recently deleted items';
+      trashList.appendChild(li);
+      return;
+    }
+    state.deleted.forEach(d => {
+      const li = document.createElement('li');
+      const when = d.deletedAt && d.deletedAt.toDate ? d.deletedAt.toDate().toLocaleString() : '';
+      // Display label depends on the type — use whatever field is the "primary" name
+      const t = TYPES[d._type];
+      const primaryKey = t.fields[0].key === 'photo' ? t.fields[1].key : t.fields[0].key;
+      const displayName = d[primaryKey] || d.address || d.name || '(untitled)';
+      li.innerHTML =
+        '<div class="title">' + escapeHtml(t.label) + ' · ' + escapeHtml(displayName) + '</div>' +
+        '<div class="when">deleted ' + escapeHtml(when) + '</div>' +
+        '<button>Restore</button>';
+      li.querySelector('button').addEventListener('click', async () => {
+        try {
+          await updateDoc(doc(db, t.collection, d.id), {
+            deleted: false,
+            deletedAt: null,
+            updatedAt: serverTimestamp(),
+          });
+        } catch (e) {
+          console.error('restore failed', e);
+          alert('Restore failed: ' + (e.code || e.message));
+        }
+      });
+      trashList.appendChild(li);
+    });
+  }
+
+  function refreshDistances() {
+    if (!airbnb()) return;
+    state.listings.forEach(l => {
+      fetchDistance(l).then(d => {
+        const el = document.querySelector('.dist[data-id="' + CSS.escape(l.id) + '"]');
+        if (!el || !d) return;
+        const km = Math.round(d.km);
+        const h = Math.floor(d.hours);
+        const mins = Math.round((d.hours - h) * 60);
+        const time = h > 0 ? `${h}h ${mins}m` : `${mins}m`;
+        el.textContent = `🚗 ${km} km · ${time} from airbnb`;
+      }).catch(() => {
+        const el = document.querySelector('.dist[data-id="' + CSS.escape(l.id) + '"]');
+        if (el) el.textContent = 'Driving distance: unavailable';
+      });
+    });
+  }
+
+  document.getElementById('sidebar-toggle').addEventListener('click', () => {
+    sidebarEl.classList.toggle('collapsed');
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Seed (idempotent) — runs once per signed-in editor session if a collection
+  // is empty. Uses setDoc with deterministic IDs so re-runs no-op safely.
+  // ─────────────────────────────────────────────────────────────────────────
+  async function seedIfEmpty() {
+    const seeds = [
+      { coll: 'listings', items: SEED_LISTINGS, idFn: listingId },
+      { coll: 'stays',    items: SEED_STAYS,    idFn: stayId },
+      { coll: 'schools',  items: SEED_SCHOOLS,  idFn: schoolId },
+    ];
+    for (const { coll, items, idFn } of seeds) {
+      const snap = await getDocs(collection(db, coll));
+      if (!snap.empty) continue;
+      console.log(`Seeding ${coll} with ${items.length} docs…`);
+      for (const item of items) {
+        const id = idFn(item);
+        await setDoc(doc(db, coll, id), {
+          ...item,
+          deleted: false,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Backfill `deleted: false` on existing docs that predate the field.
+  // Without this, where('deleted','==',false) hides them.
+  // ─────────────────────────────────────────────────────────────────────────
+  async function backfillDeletedFlag() {
+    for (const t of ['listings', 'stays', 'schools']) {
+      const snap = await getDocs(collection(db, t));
+      const writes = [];
+      snap.docs.forEach(d => {
+        const data = d.data();
+        if (typeof data.deleted !== 'boolean') {
+          writes.push(updateDoc(doc(db, t, d.id), { deleted: false }));
+        }
+      });
+      if (writes.length) {
+        console.log(`Backfilling deleted=false on ${writes.length} ${t} doc(s)…`);
+        await Promise.all(writes);
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Listeners — only attached once per signed-in session.
+  //
+  // Each active collection: where('deleted','==',false). Each "deleted ==
+  // true" listener appends to a combined state.deleted array tagged with
+  // _type so the trash panel can render and restore generically.
+  // ─────────────────────────────────────────────────────────────────────────
+  let unsubs = [];
+  const deletedByType = { listings: [], stays: [], schools: [] };
+  function rebuildDeleted() {
+    state.deleted = [].concat(
+      deletedByType.listings.map(d => ({ ...d, _type: 'listing' })),
+      deletedByType.stays   .map(d => ({ ...d, _type: 'stay' })),
+      deletedByType.schools .map(d => ({ ...d, _type: 'school' })),
+    ).sort((a, b) => {
+      const ta = a.deletedAt && a.deletedAt.toMillis ? a.deletedAt.toMillis() : 0;
+      const tb = b.deletedAt && b.deletedAt.toMillis ? b.deletedAt.toMillis() : 0;
+      return tb - ta;
+    });
+  }
+
+  function attachListeners() {
+    detachListeners();
+    const live = [
+      { coll: 'listings', stateKey: 'listings' },
+      { coll: 'stays',    stateKey: 'stays' },
+      { coll: 'schools',  stateKey: 'schools' },
+    ];
+    for (const { coll, stateKey } of live) {
+      unsubs.push(onSnapshot(
+        query(collection(db, coll), where('deleted', '==', false)),
+        snap => {
+          state[stateKey] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          render();
+        },
+        err => console.error(coll + ' listener:', err)
+      ));
+      unsubs.push(onSnapshot(
+        query(collection(db, coll), where('deleted', '==', true)),
+        snap => {
+          deletedByType[coll] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          rebuildDeleted();
+          renderTrashPanel();
+        },
+        err => console.error(coll + ' trash listener:', err)
+      ));
+    }
+  }
+  function detachListeners() {
+    unsubs.forEach(u => { try { u(); } catch (_) {} });
+    unsubs = [];
+    deletedByType.listings = [];
+    deletedByType.stays    = [];
+    deletedByType.schools  = [];
+    state.deleted = [];
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Add-new flow (Listing / Stay / School)
+  //
+  // Three ways to set a location:
+  //   1. Geocode search — type address/town, click a result.
+  //   2. Manual lat/lng — paste from another source.
+  //   3. Click on map — toggle map-click mode from the modal, then click.
+  //
+  // The Save button is disabled until: location is set AND all addRequired
+  // fields for the selected type are non-empty.
+  // ─────────────────────────────────────────────────────────────────────────
+  let pinDropMode = false;          // map-click selection mode
+  let pendingPinLatLng = null;
+  let pendingPinLabel  = null;
+  let activeTypeKey    = null;      // 'listing' | 'stay' | 'school' while modal open
+  let pendingFieldInputs = {};      // key -> input/textarea element (for current type)
+
+  function setPinDropMode(on) {
+    pinDropMode = on;
+    document.body.classList.toggle('pin-drop-mode', on);
+    addBtn.classList.toggle('active', on);
+    addBtn.textContent = on ? '📍 Click on map (Esc to cancel)' : '➕ Add';
+  }
+
+  function clearTypeFields() {
+    pinTypeFields.innerHTML = '';
+    pendingFieldInputs = {};
+  }
+
+  // Build the type-specific field block inside the modal.
+  // Reuses the same buildFieldNode used for in-place popup editing, so the
+  // look is consistent between "add" and "edit".
+  function buildAddFields(typeKey, prefill = {}) {
+    clearTypeFields();
+    const t = TYPES[typeKey];
+    for (const f of t.fields) {
+      const node = buildFieldNode(f, prefill[f.key] || '');
+      pinTypeFields.appendChild(node);
+      const input = node.querySelector('.field-input');
+      if (input) {
+        pendingFieldInputs[f.key] = input;
+        input.addEventListener('input', updateSaveEnabled);
+      }
+    }
+  }
+
+  function updateSaveEnabled() {
+    if (!activeTypeKey) { pinSaveBtn.disabled = true; return; }
+    if (!pendingPinLatLng) { pinSaveBtn.disabled = true; return; }
+    const t = TYPES[activeTypeKey];
+    for (const key of t.addRequired) {
+      const el = pendingFieldInputs[key];
+      if (!el || !el.value.trim()) { pinSaveBtn.disabled = true; return; }
+    }
+    pinSaveBtn.disabled = false;
+  }
+
+  function resetPinModal() {
+    pendingPinLatLng = null;
+    pendingPinLabel  = null;
+    activeTypeKey    = null;
+    pinSearchIn.value = '';
+    pinSearchStatus.textContent = '';
+    pinSearchResults.innerHTML = '';
+    pinSearchResults.classList.remove('has-results');
+    pinLatIn.value = '';
+    pinLngIn.value = '';
+    clearTypeFields();
+    pinSummary.textContent = 'No location selected yet.';
+    pinSummary.classList.remove('set');
+    pinSaveBtn.disabled = true;
+    document.getElementById('pin-manual-details').open = false;
+  }
+
+  function openAddModal(typeKey, { lat, lng, label } = {}) {
+    resetPinModal();
+    activeTypeKey = typeKey;
+    pinModalTitle.textContent = 'Add ' + TYPES[typeKey].label.toLowerCase();
+    pinModalBd.style.display = 'flex';
+    buildAddFields(typeKey);
+    if (typeof lat === 'number' && typeof lng === 'number') {
+      setPendingLocation(lat, lng, label || null);
+    }
+    setTimeout(() => {
+      if (pendingPinLatLng) {
+        // jump to the first required field input
+        const firstKey = TYPES[typeKey].addRequired[0];
+        const el = pendingFieldInputs[firstKey];
+        if (el) el.focus(); else pinSearchIn.focus();
+      } else {
+        pinSearchIn.focus();
+      }
+    }, 0);
+  }
+
+  function setPendingLocation(lat, lng, label) {
+    pendingPinLatLng = { lat, lng };
+    pendingPinLabel  = label;
+    pinSummary.textContent = (label ? label + '  ·  ' : '') +
+      `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    pinSummary.classList.add('set');
+    // Pre-fill the type-appropriate first text field with the label, if empty
+    if (label && activeTypeKey) {
+      const firstKey = TYPES[activeTypeKey].addRequired[0];
+      const el = pendingFieldInputs[firstKey];
+      if (el && !el.value.trim()) el.value = label;
+    }
+    pinLatIn.value = lat;
+    pinLngIn.value = lng;
+    updateSaveEnabled();
+  }
+
+  // Type-chooser popover
+  function openTypeChooser() {
+    typeChooser.style.display = 'flex';
+  }
+  function closeTypeChooser() {
+    typeChooser.style.display = 'none';
+  }
+  typeChooser.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.dataset.type;
+      closeTypeChooser();
+      openAddModal(t);
+    });
+  });
+  // Close popover on outside click
+  document.addEventListener('click', e => {
+    if (typeChooser.style.display !== 'flex') return;
+    if (typeChooser.contains(e.target) || addBtn.contains(e.target)) return;
+    closeTypeChooser();
+  });
+
+  // "+ Add" toolbar button — opens the type chooser
+  addBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (pinDropMode) { setPinDropMode(false); return; }
+    if (typeChooser.style.display === 'flex') closeTypeChooser();
+    else openTypeChooser();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      setPinDropMode(false);
+      closeTypeChooser();
+      if (pinModalBd.style.display === 'flex') {
+        pinModalBd.style.display = 'none';
+        resetPinModal();
+      }
+    }
+  });
+
+  // Map click — only when explicitly in map-click mode.
+  // The previously active type (set before entering map-click mode) is preserved.
+  let mapClickTypeKey = null;
+  map.on('click', (e) => {
+    if (!pinDropMode) return;
+    const tk = mapClickTypeKey || activeTypeKey || 'listing';
+    setPinDropMode(false);
+    openAddModal(tk, { lat: e.latlng.lat, lng: e.latlng.lng });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Nominatim geocoding (OpenStreetMap)
+  //   Public, no API key. Usage policy: max 1 req/sec, descriptive User-Agent
+  //   or Referer (browser supplies Referer automatically), no heavy bulk use.
+  //   https://operations.osmfoundation.org/policies/nominatim/
+  // ─────────────────────────────────────────────────────────────────────────
+  const geocodeCache = new Map();   // q -> results array (session-only)
+  let geocodeTimer = null;
+  let geocodeAbort = null;
+  let lastGeocodeAt = 0;
+
+  async function geocode(q) {
+    if (geocodeCache.has(q)) return geocodeCache.get(q);
+
+    // Enforce ≥1s between requests to Nominatim
+    const since = Date.now() - lastGeocodeAt;
+    if (since < 1100) await new Promise(r => setTimeout(r, 1100 - since));
+    lastGeocodeAt = Date.now();
+
+    if (geocodeAbort) geocodeAbort.abort();
+    geocodeAbort = new AbortController();
+
+    const url = 'https://nominatim.openstreetmap.org/search'
+      + '?format=json&limit=6&addressdetails=1'
+      + '&q=' + encodeURIComponent(q);
+    const r = await fetch(url, {
+      signal: geocodeAbort.signal,
+      headers: { 'Accept-Language': 'en' }
+    });
+    if (!r.ok) throw new Error('Nominatim ' + r.status);
+    const data = await r.json();
+    geocodeCache.set(q, data);
+    return data;
+  }
+
+  function renderGeocodeResults(results) {
+    pinSearchResults.innerHTML = '';
+    if (!results || results.length === 0) {
+      pinSearchResults.classList.remove('has-results');
+      pinSearchStatus.textContent = 'No matches.';
+      return;
+    }
+    results.forEach(r => {
+      const li = document.createElement('li');
+      li.textContent = r.display_name;
+      li.addEventListener('click', () => {
+        const lat = parseFloat(r.lat);
+        const lng = parseFloat(r.lon);
+        // Use the first comma-segment as a concise label
+        const shortLabel = (r.display_name || '').split(',').slice(0, 2).join(',').trim();
+        setPendingLocation(lat, lng, shortLabel);
+        pinSearchResults.innerHTML = '';
+        pinSearchResults.classList.remove('has-results');
+        pinSearchStatus.textContent = '';
+        // Move the map to the selected location so the user can see context.
+        map.flyTo([lat, lng], Math.max(map.getZoom(), 11), { duration: 0.6 });
+        // Focus the first required field for the active type, if any
+        if (activeTypeKey) {
+          const firstKey = TYPES[activeTypeKey].addRequired[0];
+          const el = pendingFieldInputs[firstKey];
+          if (el) el.focus();
+        }
+      });
+      pinSearchResults.appendChild(li);
+    });
+    pinSearchResults.classList.add('has-results');
+    pinSearchStatus.textContent = results.length + ' result' + (results.length === 1 ? '' : 's') + ' — click one.';
+  }
+
+  pinSearchIn.addEventListener('input', () => {
+    clearTimeout(geocodeTimer);
+    const q = pinSearchIn.value.trim();
+    if (q.length < 3) {
+      pinSearchResults.innerHTML = '';
+      pinSearchResults.classList.remove('has-results');
+      pinSearchStatus.textContent = q.length === 0 ? '' : 'Keep typing…';
+      return;
+    }
+    pinSearchStatus.textContent = 'Searching…';
+    geocodeTimer = setTimeout(async () => {
+      try {
+        const results = await geocode(q);
+        // Ignore stale responses if the input changed while we were waiting
+        if (pinSearchIn.value.trim() !== q) return;
+        renderGeocodeResults(results);
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        console.error('geocode failed', e);
+        pinSearchStatus.textContent = 'Search failed: ' + e.message;
+      }
+    }, 450);
+  });
+  pinSearchIn.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      // Pick the first result if present
+      const first = pinSearchResults.querySelector('li');
+      if (first) first.click();
+    }
+  });
+
+  // Manual lat/lng input — updates pending location when both fields parse.
+  function syncManualLatLng() {
+    const lat = parseFloat(pinLatIn.value);
+    const lng = parseFloat(pinLngIn.value);
+    if (Number.isFinite(lat) && Number.isFinite(lng) &&
+        lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      setPendingLocation(lat, lng, null);
+    }
+  }
+  pinLatIn.addEventListener('input', syncManualLatLng);
+  pinLngIn.addEventListener('input', syncManualLatLng);
+
+  // "Click on map instead" — close the modal, enter map-click mode.
+  // Preserve the active type so when the user clicks the map, the modal
+  // reopens for the same type.
+  document.getElementById('pin-map-click-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    mapClickTypeKey = activeTypeKey;
+    pinModalBd.style.display = 'none';
+    resetPinModal();
+    setPinDropMode(true);
+  });
+
+  document.getElementById('pin-cancel').addEventListener('click', () => {
+    pinModalBd.style.display = 'none';
+    resetPinModal();
+  });
+
+  pinSaveBtn.addEventListener('click', async () => {
+    if (!pendingPinLatLng || !activeTypeKey) return;
+    const t = TYPES[activeTypeKey];
+
+    // Build the doc from the dynamic field inputs
+    const data = {
+      lat: pendingPinLatLng.lat,
+      lng: pendingPinLatLng.lng,
+      deleted: false,
+      createdBy: auth.currentUser ? auth.currentUser.email : null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    for (const f of t.fields) {
+      const el = pendingFieldInputs[f.key];
+      if (el) data[f.key] = el.value;
+    }
+
+    // Derive a deterministic ID from the type's primary name field, falling
+    // back to a timestamp if that field is empty (it shouldn't be — addRequired
+    // includes the primary field — but be defensive).
+    const primaryKey = t.addRequired[0];
+    const primaryVal = (data[primaryKey] || '').trim();
+    const baseSlug = primaryVal ? slugify(primaryVal) : ('item-' + Date.now().toString(36));
+    let id = baseSlug;
+    // Avoid clobbering an existing doc — append a short suffix if it exists.
+    try {
+      const existing = await getDoc(doc(db, t.collection, id));
+      if (existing.exists()) {
+        id = baseSlug + '-' + Math.random().toString(36).slice(2, 6);
+      }
+    } catch (_) { /* getDoc may fail offline; fall through and try setDoc */ }
+
+    pinSaveBtn.disabled = true;
+    try {
+      await setDoc(doc(db, t.collection, id), data);
+      pinModalBd.style.display = 'none';
+      resetPinModal();
+      setPinDropMode(false);
+    } catch (e) {
+      console.error('save failed', e);
+      alert('Save failed: ' + (e.code || e.message));
+      pinSaveBtn.disabled = false;
+    }
+  });
+
+  trashBtn.addEventListener('click', () => {
+    trashPanel.style.display = trashPanel.style.display === 'block' ? 'none' : 'block';
+  });
+  document.getElementById('trash-close').addEventListener('click', () => {
+    trashPanel.style.display = 'none';
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Auth gate — drives the whole app lifecycle
+  // ─────────────────────────────────────────────────────────────────────────
+  function showAuthGate() {
+    authGate.style.display = 'flex';
+    userChip.style.display = 'none';
+    sidebarEl.style.display = 'none';
+    toolbar.style.display = 'none';
+    trashPanel.style.display = 'none';
+    pinModalBd.style.display = 'none';
+    setPinDropMode(false);
+  }
+  function showAccessDenied(email) {
+    authGate.style.display = 'flex';
+    authCard.innerHTML =
+      '<h1>Access denied</h1>' +
+      '<p>Your account <span class="denied-email">' + escapeHtml(email) + '</span> is not on the allowlist for this map. Sign out and try a different Google account.</p>' +
+      '<button id="signout-denied">Sign out</button>';
+    document.getElementById('signout-denied').addEventListener('click', () => signOut(auth));
+  }
+  function showApp(email) {
+    authGate.style.display = 'none';
+    userEmailEl.textContent = email;
+    userChip.style.display = 'flex';
+    sidebarEl.style.display = 'block';
+    toolbar.style.display = 'flex';
+    // Invalidate Leaflet size in case the map was hidden under the gate
+    setTimeout(() => map.invalidateSize(), 50);
+  }
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      detachListeners();
+      didInitialFit = false;
+      clearMarkers();
+      showAuthGate();
+      return;
+    }
+    const email = (user.email || '').toLowerCase();
+    const allowed = ALLOWED_EMAILS.map(e => e.toLowerCase()).includes(email);
+    if (!allowed) {
+      detachListeners();
+      showAccessDenied(user.email || '(no email)');
+      return;
+    }
+    showApp(user.email);
+    try {
+      await seedIfEmpty();
+    } catch (e) {
+      console.warn('seed failed (rules may not allow writes yet):', e);
+    }
+    try {
+      await backfillDeletedFlag();
+    } catch (e) {
+      console.warn('backfill failed:', e);
+    }
+    attachListeners();
+  });
+</script>
+</body>
+</html>
