@@ -138,6 +138,15 @@
     cursor: pointer; user-select: none;
   }
   #sidebar h2 .chev { transition: transform 0.2s; font-size: 12px; }
+  #sidebar h2 .header-actions { display: inline-flex; align-items: center; gap: 8px; }
+  #sidebar h2 #reset-ranks-btn {
+    background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.35);
+    color: white; font-size: 13px; line-height: 1;
+    width: 22px; height: 22px; border-radius: 50%;
+    cursor: pointer; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  #sidebar h2 #reset-ranks-btn:hover { background: rgba(255,255,255,0.32); }
   #sidebar.collapsed h2 { border-radius: 6px; }
   #sidebar.collapsed h2 .chev { transform: rotate(-90deg); }
   #sidebar.collapsed ul { display: none; }
@@ -389,7 +398,13 @@
 </div>
 
 <div id="sidebar">
-  <h2 id="sidebar-toggle"><span id="sidebar-title">Listings (0)</span><span class="chev">▼</span></h2>
+  <h2 id="sidebar-toggle">
+    <span id="sidebar-title">Listings (0)</span>
+    <span class="header-actions">
+      <button id="reset-ranks-btn" title="Clear all rankings">↻</button>
+      <span class="chev">▼</span>
+    </span>
+  </h2>
   <ul id="sidebar-list"></ul>
 </div>
 
@@ -444,7 +459,7 @@
   } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
   import {
     getFirestore, collection, doc, onSnapshot,
-    setDoc, updateDoc, deleteDoc, serverTimestamp, query, where, getDocs, getDoc, Timestamp
+    setDoc, updateDoc, deleteDoc, deleteField, serverTimestamp, query, where, getDocs, getDoc, Timestamp
   } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1352,6 +1367,29 @@
 
   document.getElementById('sidebar-toggle').addEventListener('click', () => {
     sidebarEl.classList.toggle('collapsed');
+  });
+
+  // Reset rankings — removes the `rank` field from every listing so they all
+  // revert to unranked. Confirmation prompt because it's destructive.
+  document.getElementById('reset-ranks-btn').addEventListener('click', async (e) => {
+    e.stopPropagation();   // don't toggle the sidebar collapse
+    const ranked = state.listings.filter(l => typeof l.rank === 'number');
+    if (ranked.length === 0) {
+      alert('No rankings to reset.');
+      return;
+    }
+    if (!confirm('Clear rankings on ' + ranked.length + ' listing(s)?')) return;
+    try {
+      await Promise.all(ranked.map(l =>
+        updateDoc(doc(db, 'listings', l.id), {
+          rank: deleteField(),
+          updatedAt: serverTimestamp(),
+        })
+      ));
+    } catch (err) {
+      console.error('reset ranks failed', err);
+      alert('Reset failed: ' + (err.code || err.message));
+    }
   });
 
   // ─────────────────────────────────────────────────────────────────────────
