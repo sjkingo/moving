@@ -349,27 +349,50 @@
   #pin-map-click-row a:hover { text-decoration: underline; }
 
   /* Recently-deleted panel */
-  #trash-panel {
+  #activity-panel {
     position: absolute; bottom: 24px; left: 200px; z-index: 1500;
-    width: 320px; max-height: 60vh; overflow-y: auto;
+    width: 380px; max-height: 60vh;
     background: white; border-radius: 8px;
     box-shadow: 0 4px 16px rgba(0,0,0,0.2);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    display: none;
+    display: none; flex-direction: column; overflow: hidden;
   }
-  #trash-panel h3 {
-    margin: 0; padding: 10px 14px; font-size: 14px; background: #6b7280; color: white;
-    border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center;
+  #activity-panel .activity-header {
+    display: flex; justify-content: space-between; align-items: stretch;
+    background: #6b7280; color: white;
+    border-radius: 8px 8px 0 0;
   }
-  #trash-panel h3 .close { cursor: pointer; }
-  #trash-panel ul { list-style: none; margin: 0; padding: 0; }
-  #trash-panel li { padding: 10px 14px; border-bottom: 1px solid #eee; font-size: 13px; }
-  #trash-panel li:last-child { border-bottom: none; }
-  #trash-panel li .title { font-weight: 500; color: #222; }
-  #trash-panel li .when { font-size: 11px; color: #888; margin: 2px 0 6px; }
-  #trash-panel li button { background: #1a73e8; color: white; border: none; border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
-  #trash-panel li button:hover { background: #1666c9; }
-  #trash-panel .empty { padding: 16px; text-align: center; color: #888; font-size: 13px; }
+  #activity-panel .activity-tabs { display: flex; flex: 1; }
+  #activity-panel .tab {
+    background: transparent; color: rgba(255,255,255,0.7); border: none;
+    padding: 10px 14px; font-size: 13px; cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  #activity-panel .tab:hover { color: white; }
+  #activity-panel .tab.active { color: white; border-bottom-color: white; font-weight: 500; }
+  #activity-panel .close {
+    cursor: pointer; padding: 10px 14px; font-size: 18px; line-height: 1;
+    display: flex; align-items: center;
+  }
+  #activity-panel .close:hover { background: rgba(255,255,255,0.12); }
+  #activity-panel .tab-pane { overflow-y: auto; flex: 1; min-height: 0; }
+  #activity-panel ul { list-style: none; margin: 0; padding: 0; }
+  #activity-panel li { padding: 10px 14px; border-bottom: 1px solid #eee; font-size: 13px; }
+  #activity-panel li:last-child { border-bottom: none; }
+  #activity-panel li .title { font-weight: 500; color: #222; }
+  #activity-panel li .when { font-size: 11px; color: #888; margin: 2px 0 6px; }
+  #activity-panel li button {
+    background: #1a73e8; color: white; border: none; border-radius: 4px;
+    padding: 4px 10px; font-size: 12px; cursor: pointer;
+  }
+  #activity-panel li button:hover { background: #1666c9; }
+  #activity-panel .empty { padding: 16px; text-align: center; color: #888; font-size: 13px; }
+  /* History-specific event row styling */
+  #activity-panel #history-list li { line-height: 1.4; }
+  #activity-panel #history-list .ev-icon { display: inline-block; width: 22px; }
+  #activity-panel #history-list .ev-who   { color: #1a73e8; }
+  #activity-panel #history-list .ev-value { color: #374151; background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  #activity-panel #history-list .ev-target { font-weight: 500; }
 </style>
 </head>
 <body>
@@ -398,7 +421,7 @@
 
 <div id="toolbar">
   <button id="add-btn">➕ Add</button>
-  <button id="trash-btn">🗑 Recently deleted (<span id="trash-count">0</span>)</button>
+  <button id="history-btn">🕒 History</button>
 </div>
 
 <div id="type-chooser">
@@ -453,9 +476,20 @@
   </div>
 </div>
 
-<div id="trash-panel">
-  <h3>Recently deleted <span class="close" id="trash-close">×</span></h3>
-  <ul id="trash-list"></ul>
+<div id="activity-panel">
+  <div class="activity-header">
+    <div class="activity-tabs">
+      <button class="tab active" data-tab="history">History</button>
+      <button class="tab" data-tab="trash">Recently deleted (<span id="trash-count">0</span>)</button>
+    </div>
+    <span class="close" id="activity-close">×</span>
+  </div>
+  <div class="tab-pane" data-pane="history">
+    <ul id="history-list"></ul>
+  </div>
+  <div class="tab-pane" data-pane="trash" hidden>
+    <ul id="trash-list"></ul>
+  </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -469,7 +503,7 @@
   } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
   import {
     getFirestore, collection, doc, onSnapshot,
-    setDoc, updateDoc, deleteDoc, deleteField, serverTimestamp, query, where, getDocs, getDoc, Timestamp
+    setDoc, addDoc, updateDoc, deleteDoc, deleteField, serverTimestamp, query, where, orderBy, limit, getDocs, getDoc, Timestamp
   } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -585,10 +619,11 @@
   const toolbar     = document.getElementById('toolbar');
   const addBtn      = document.getElementById('add-btn');
   const typeChooser = document.getElementById('type-chooser');
-  const trashBtn    = document.getElementById('trash-btn');
+  const historyBtn  = document.getElementById('history-btn');
   const trashCountEl= document.getElementById('trash-count');
-  const trashPanel  = document.getElementById('trash-panel');
+  const activityPanel = document.getElementById('activity-panel');
   const trashList   = document.getElementById('trash-list');
+  const historyList = document.getElementById('history-list');
   const pinModalBd  = document.getElementById('pin-modal-backdrop');
   const pinModalTitle  = document.getElementById('pin-modal-title');
   const pinTypeFields  = document.getElementById('pin-type-fields');
@@ -684,10 +719,55 @@
   async function setListingRank(id, newRank) {
     try {
       await updateDoc(doc(db, 'listings', id), { rank: newRank, updatedAt: serverTimestamp() });
+      logEvent('rank', 'listings', id, listingDisplayName(id), 'rank', newRank);
     } catch (e) {
       console.error('rank update failed', e);
       alert('Rank update failed: ' + (e.code || e.message));
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // History — append-only event log
+  //
+  //   Each mutation (add/edit/delete/restore/rank) writes one doc to the
+  //   `events` collection. Events are immutable (rules disallow update/delete).
+  //   Display: most recent first, in the History tab of the activity panel.
+  //
+  //   logEvent is fire-and-forget so a failure to log doesn't block the
+  //   user's actual edit. We do still console.warn on failure.
+  // ─────────────────────────────────────────────────────────────────────────
+  function listingDisplayName(id) {
+    const l = state.listings.find(x => x.id === id);
+    if (l) return l.address || l.name || '(unnamed)';
+    // Might be deleted; check state.deleted
+    const d = (state.deleted || []).find(x => x.id === id && x._type === 'listing');
+    if (d) return d.address || d.name || '(unnamed)';
+    return id;
+  }
+
+  function docDisplayName(typeKey, item) {
+    const t = TYPES[typeKey];
+    const key = t.nameKey || 'name';
+    return (item && (item[key] || item.address || item.name)) || '(unnamed)';
+  }
+
+  function logEvent(action, coll, docId, displayName, field, newValue) {
+    // Trim very long values so events don't bloat
+    let val = newValue;
+    if (typeof val === 'string' && val.length > 200) val = val.slice(0, 197) + '…';
+    const payload = {
+      action,                      // 'add' | 'edit' | 'delete' | 'restore' | 'rank'
+      collection: coll,
+      docId: docId,
+      displayName: displayName || '',
+      by: (auth.currentUser && auth.currentUser.email) || 'unknown',
+      at: serverTimestamp(),
+    };
+    if (field !== undefined) payload.field = field;
+    if (val !== undefined)   payload.newValue = val;
+    return addDoc(collection(db, 'events'), payload).catch(e => {
+      console.warn('logEvent failed:', e.code || e.message);
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -877,6 +957,8 @@
     schools: [],
     // Combined "recently deleted" across all 3 types, with .type field on each
     deleted: [],
+    // Last 100 events, newest first
+    history: [],
   };
   const markers = { listings: [], stays: [], schools: [] };
   let didInitialFit = false;
@@ -1000,6 +1082,12 @@
       try {
         await updateDoc(doc(db, coll, id), { [key]: v, updatedAt: serverTimestamp() });
         lastSaved = v;
+        // Lookup display name from current state
+        const list = state[coll] || [];
+        const item = list.find(x => x.id === id);
+        const typeKey = typeForCollection(coll);
+        const name = item && typeKey ? docDisplayName(typeKey, item) : id;
+        logEvent('edit', coll, id, name, key, v);
         statusEl.textContent = 'Saved';
         setTimeout(() => { if (statusEl.textContent === 'Saved') statusEl.textContent = ''; }, 1200);
       } catch (e) {
@@ -1135,11 +1223,16 @@
       delBtn.addEventListener('click', async () => {
         if (!confirm('Delete this ' + t.label.toLowerCase() + '? You can restore it from "Recently deleted".')) return;
         try {
+          // Resolve display name BEFORE deletion (we'd lose it otherwise)
+          const list = state[t.collection] || [];
+          const item = list.find(x => x.id === id);
+          const name = item ? docDisplayName(typeKey, item) : id;
           await updateDoc(doc(db, t.collection, id), {
             deleted: true,
             deletedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
+          logEvent('delete', t.collection, id, name);
         } catch (e) {
           console.error('soft-delete failed', e);
           alert('Delete failed: ' + (e.code || e.message));
@@ -1380,6 +1473,7 @@
             deletedAt: null,
             updatedAt: serverTimestamp(),
           });
+          logEvent('restore', t.collection, d.id, displayName);
         } catch (e) {
           console.error('restore failed', e);
           alert('Restore failed: ' + (e.code || e.message));
@@ -1387,6 +1481,80 @@
       });
       trashList.appendChild(li);
     });
+  }
+
+  // History panel — newest-first list of events. Read-only; the rendered
+  // values are derived from each event doc plus current TYPES metadata.
+  function renderHistoryPanel() {
+    historyList.innerHTML = '';
+    if (state.history.length === 0) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'No history yet';
+      historyList.appendChild(li);
+      return;
+    }
+    for (const ev of state.history) {
+      const li = document.createElement('li');
+      const icon = ({
+        add:        '🆕',
+        edit:       '✏️',
+        delete:     '🗑️',
+        restore:    '↩️',
+        rank:       '↕️',
+        'rank-reset': '↻',
+      })[ev.action] || '·';
+      const who = (ev.by || 'unknown').split('@')[0];
+      const tk = typeForCollection(ev.collection);
+      const typeLabel = tk ? TYPES[tk].label.toLowerCase() : ev.collection;
+      const target = ev.displayName || ev.docId || '';
+      let phrase;
+      switch (ev.action) {
+        case 'add':
+          phrase = 'added ' + typeLabel + ' <span class="ev-target">' + escapeHtml(target) + '</span>';
+          break;
+        case 'edit':
+          phrase = 'edited ' + escapeHtml(ev.field || 'field') + ' on <span class="ev-target">' + escapeHtml(target) + '</span>' +
+                   (ev.newValue !== undefined && ev.newValue !== '' ?
+                     ' → <span class="ev-value">' + escapeHtml(String(ev.newValue)) + '</span>' :
+                     ' (cleared)');
+          break;
+        case 'delete':
+          phrase = 'deleted ' + typeLabel + ' <span class="ev-target">' + escapeHtml(target) + '</span>';
+          break;
+        case 'restore':
+          phrase = 'restored ' + typeLabel + ' <span class="ev-target">' + escapeHtml(target) + '</span>';
+          break;
+        case 'rank':
+          phrase = 'reranked <span class="ev-target">' + escapeHtml(target) + '</span> → <span class="ev-value">' + escapeHtml(String(ev.newValue)) + '</span>';
+          break;
+        case 'rank-reset':
+          phrase = 'cleared rankings (' + escapeHtml(target) + ')';
+          break;
+        default:
+          phrase = escapeHtml(ev.action) + ' on ' + escapeHtml(target);
+      }
+      const when = ev.at && ev.at.toDate ? formatRelTime(ev.at.toDate()) : '…';
+      li.innerHTML =
+        '<div><span class="ev-icon">' + icon + '</span>' +
+        '<span class="ev-who">' + escapeHtml(who) + '</span> ' +
+        phrase + '</div>' +
+        '<div class="when">' + escapeHtml(when) + '</div>';
+      historyList.appendChild(li);
+    }
+  }
+
+  function formatRelTime(d) {
+    const ms = Date.now() - d.getTime();
+    const s = Math.round(ms / 1000);
+    if (s < 60) return s + 's ago';
+    const m = Math.round(s / 60);
+    if (m < 60) return m + 'm ago';
+    const h = Math.round(m / 60);
+    if (h < 24) return h + 'h ago';
+    const days = Math.round(h / 24);
+    if (days < 7) return days + 'd ago';
+    return d.toLocaleDateString();
   }
 
   function refreshDistances() {
@@ -1428,6 +1596,8 @@
           updatedAt: serverTimestamp(),
         })
       ));
+      // One summary event for the bulk reset
+      logEvent('rank-reset', 'listings', 'bulk', String(ranked.length) + ' listing(s)');
     } catch (err) {
       console.error('reset ranks failed', err);
       alert('Reset failed: ' + (err.code || err.message));
@@ -1530,6 +1700,15 @@
         err => console.error(coll + ' trash listener:', err)
       ));
     }
+    // History — last 100 events, newest first
+    unsubs.push(onSnapshot(
+      query(collection(db, 'events'), orderBy('at', 'desc'), limit(100)),
+      snap => {
+        state.history = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderHistoryPanel();
+      },
+      err => console.error('events listener:', err.code || err.message)
+    ));
   }
   function detachListeners() {
     unsubs.forEach(u => { try { u(); } catch (_) {} });
@@ -1538,6 +1717,7 @@
     deletedByType.stays    = [];
     deletedByType.schools  = [];
     state.deleted = [];
+    state.history = [];
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1867,6 +2047,7 @@
     pinSaveBtn.disabled = true;
     try {
       await setDoc(doc(db, t.collection, id), data);
+      logEvent('add', t.collection, id, docDisplayName(activeTypeKey, data));
       pinModalBd.style.display = 'none';
       resetPinModal();
       setPinDropMode(false);
@@ -1877,11 +2058,21 @@
     }
   });
 
-  trashBtn.addEventListener('click', () => {
-    trashPanel.style.display = trashPanel.style.display === 'block' ? 'none' : 'block';
+  historyBtn.addEventListener('click', () => {
+    activityPanel.style.display = activityPanel.style.display === 'flex' ? 'none' : 'flex';
   });
-  document.getElementById('trash-close').addEventListener('click', () => {
-    trashPanel.style.display = 'none';
+  document.getElementById('activity-close').addEventListener('click', () => {
+    activityPanel.style.display = 'none';
+  });
+  // Tab switching inside the activity panel
+  activityPanel.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.tab;
+      activityPanel.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === target));
+      activityPanel.querySelectorAll('.tab-pane').forEach(p => {
+        p.hidden = p.dataset.pane !== target;
+      });
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1892,7 +2083,7 @@
     userChip.style.display = 'none';
     sidebarEl.style.display = 'none';
     toolbar.style.display = 'none';
-    trashPanel.style.display = 'none';
+    activityPanel.style.display = 'none';
     pinModalBd.style.display = 'none';
     setPinDropMode(false);
   }
@@ -2035,8 +2226,12 @@
     });
 
     // Re-render every 10s so stale chips age out / disappear without
-    // waiting for a new snapshot.
-    presenceRerenderTimer = setInterval(renderPresence, 10_000);
+    // waiting for a new snapshot. Same tick refreshes the history panel's
+    // relative-time labels (30s ago → 1m ago → …).
+    presenceRerenderTimer = setInterval(() => {
+      renderPresence();
+      renderHistoryPanel();
+    }, 10_000);
 
     // Tab visibility change: write immediately so we transition states fast
     document.addEventListener('visibilitychange', presenceVisibilityHandler);
