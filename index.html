@@ -214,6 +214,11 @@
     100% { transform: scale(3.5); opacity: 0;    }
   }
   #sidebar .loc { font-weight: 600; color: #222; margin-bottom: 2px; }
+  #sidebar .loc .loc-link {
+    font-size: 12px; text-decoration: none; margin-left: 4px;
+    opacity: 0.7; cursor: pointer; display: inline-block;
+  }
+  #sidebar .loc .loc-link:hover { opacity: 1; }
   #sidebar .meta { color: #666; font-size: 12px; margin-bottom: 2px; }
   #sidebar .note-preview { color: #444; font-size: 12px; font-style: italic; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #sidebar a {
@@ -225,7 +230,7 @@
 
   /* Popups */
   .listing-popup {
-    width: 260px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    width: 325px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     position: relative;
     max-height: calc(100vh - 140px);   /* leave room for the marker tail + zoom controls */
     overflow-y: auto;
@@ -937,7 +942,7 @@
         { key: 'address', label: 'Address',   kind: 'input',   cssClass: 'addr',    placeholder: 'Town, region, country' },
         { key: 'beds',    label: 'Beds',      kind: 'input',   cssClass: 'beds',    placeholder: '5 bed, 1 ha' },
         { key: 'url',     label: 'Listing URL', kind: 'input', cssClass: 'url',     placeholder: 'https://…' },
-        { key: 'contactMade', label: 'Contact made?', kind: 'input', cssClass: 'contact', placeholder: 'e.g. Emailed 2026-05-18, awaiting reply' },
+        { key: 'contactMade', label: 'Contact made?', kind: 'textarea', cssClass: 'contact', placeholder: 'e.g. Emailed 2026-05-18, awaiting reply' },
         { key: 'notes',   label: 'Notes',     kind: 'textarea',cssClass: 'notes',   placeholder: 'Add a note…' },
       ],
       addRequired: ['price', 'address'],
@@ -951,7 +956,7 @@
         { key: 'photo',   label: 'Photo URL', kind: 'photo',   cssClass: 'photo',   placeholder: 'https://… (or photos/foo.png)' },
         { key: 'name',    label: 'Name',      kind: 'input',   cssClass: 'price',   placeholder: 'Airbnb — temporary stay' },
         { key: 'address', label: 'Address',   kind: 'input',   cssClass: 'addr',    placeholder: 'Town, region, country' },
-        { key: 'contactMade', label: 'Contact made?', kind: 'input', cssClass: 'contact', placeholder: 'e.g. Booked via Airbnb 2026-04-30' },
+        { key: 'contactMade', label: 'Contact made?', kind: 'textarea', cssClass: 'contact', placeholder: 'e.g. Booked via Airbnb 2026-04-30' },
         { key: 'notes',   label: 'Notes',     kind: 'textarea',cssClass: 'notes',   placeholder: 'Add a note…' },
       ],
       addRequired: ['name'],
@@ -967,7 +972,7 @@
         { key: 'curriculum', label: 'Curriculum', kind: 'input',   cssClass: 'beds',    placeholder: 'British / IB / Montessori' },
         { key: 'drive',      label: 'Driving',    kind: 'input',   cssClass: 'beds',    placeholder: '13 min from Vigo' },
         { key: 'url',        label: 'URL',        kind: 'input',   cssClass: 'url',     placeholder: 'https://…' },
-        { key: 'contactMade', label: 'Contact made?', kind: 'input', cssClass: 'contact', placeholder: 'e.g. Phoned admissions 2026-05-15' },
+        { key: 'contactMade', label: 'Contact made?', kind: 'textarea', cssClass: 'contact', placeholder: 'e.g. Phoned admissions 2026-05-15' },
         { key: 'notes',      label: 'Notes',      kind: 'textarea',cssClass: 'notes',   placeholder: 'Add a note…' },
       ],
       addRequired: ['name'],
@@ -1179,7 +1184,7 @@
       // popup doesn't dismiss a popup with in-progress edits.
       // closeButton:false hides Leaflet's own × (we render our own).
       m.bindPopup(popupEl, {
-        maxWidth: 280,
+        maxWidth: 350,
         closeButton: false,
         autoClose: false,
         autoPan: true,
@@ -1189,6 +1194,16 @@
         closeOnEscapeKey: true,
       });
       m.on('popupopen', () => {
+        // Close any other open popup so only one is open at a time.
+        // We do this explicitly (rather than via Leaflet's autoClose) so the
+        // outside-click and snapshot-rerender protections still apply.
+        for (const key of Object.keys(markers)) {
+          for (const other of markers[key]) {
+            if (other !== m && other.isPopupOpen && other.isPopupOpen()) {
+              other.closePopup();
+            }
+          }
+        }
         openPopupCount++;
         attachPopupHandlers(popupEl, typeKey, item.id, m);
         if (opts.onPopupOpen) opts.onPopupOpen(item, i);
@@ -1252,10 +1267,12 @@
         li.innerHTML =
           '<div class="rank-handle' + (isRanked ? '' : ' unranked') + '" draggable="true" title="Drag to reorder">' + positionText + '</div>' +
           thumbHtml +
-          '<div class="loc">' + escapeHtml(l.address || '') + '</div>' +
+          '<div class="loc">' +
+            escapeHtml(l.address || '') +
+            (l.url ? ' <a class="loc-link" href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener" title="Open listing">🔗</a>' : '') +
+          '</div>' +
           '<div class="meta">' + escapeHtml(l.price || '') + ' · ' + escapeHtml(l.beds || '') + '</div>' +
           '<div class="dist" data-id="' + escapeHtml(l.id) + '">Driving distance: …</div>' +
-          (l.url ? '<a href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener">' + escapeHtml(l.url) + '</a>' : '') +
           notePreview;
         li.addEventListener('click', (e) => {
           if (e.target.tagName === 'A') return;
