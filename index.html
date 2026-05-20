@@ -1188,6 +1188,13 @@
         // If a snapshot landed while the popup was open, render now.
         if (openPopupCount === 0 && renderDeferred) render();
       });
+      // Hover the marker → highlight the matching sidebar row (same effect
+      // as opening the popup, minus the popup itself). Listings only — schools
+      // and stays don't have a sidebar.
+      if (opts.onMarkerHover) {
+        m.on('mouseover', () => opts.onMarkerHover(item, i, true));
+        m.on('mouseout',  () => opts.onMarkerHover(item, i, false));
+      }
       markers[t.collection].push(m);
       bounds.push([item.lat, item.lng]);
       allPointsForOverlay.push([item.lng, item.lat]);
@@ -1277,15 +1284,28 @@
         sidebarList.appendChild(li);
         listingsSidebarItems.push(li);
       },
+      onMarkerHover: (_l, i, entering) => {
+        const row = listingsSidebarItems[i];
+        if (!row) return;
+        if (entering) {
+          row.classList.add('active');
+          row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else {
+          // Don't clear if the popup is open — onPopupClose handles that.
+          if (!row.classList.contains('popup-active')) row.classList.remove('active');
+        }
+      },
       onPopupOpen: (_l, i) => {
-        listingsSidebarItems.forEach(x => x.classList.remove('active'));
+        listingsSidebarItems.forEach(x => { x.classList.remove('active'); x.classList.remove('popup-active'); });
         if (listingsSidebarItems[i]) {
           listingsSidebarItems[i].classList.add('active');
+          listingsSidebarItems[i].classList.add('popup-active');
           listingsSidebarItems[i].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
       },
       onPopupClose: (_l, i) => {
-        if (listingsSidebarItems[i]) listingsSidebarItems[i].classList.remove('active');
+        const row = listingsSidebarItems[i];
+        if (row) { row.classList.remove('active'); row.classList.remove('popup-active'); }
       },
     });
 
