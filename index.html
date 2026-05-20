@@ -1327,7 +1327,11 @@
   // reveals the type-coloured individual pins.
   // ─────────────────────────────────────────────────────────────────────────
   const clusterGroup = L.markerClusterGroup({
-    maxClusterRadius: 80,
+    // Tight clustering — only merge pins that are genuinely overlapping or
+    // very close in screen space, so country/region zoom still shows
+    // distinct markers in different cities.
+    maxClusterRadius: 35,
+    disableClusteringAtZoom: 10,   // at zoom 10+ (~town scale), never cluster
     showCoverageOnHover: false,
     spiderfyOnMaxZoom: true,
     iconCreateFunction: (cluster) => {
