@@ -854,13 +854,7 @@
     );
     provinceLayer = L.geoJSON({ type: 'FeatureCollection', features: matched }, {
       style: { color: '#1a73e8', weight: 1.5, opacity: 0.8, fillColor: '#1a73e8', fillOpacity: 0.08 },
-      onEachFeature: (feat, layer) => {
-        layer.bindTooltip(feat.properties.name, { sticky: true, direction: 'top' });
-        layer.on({
-          mouseover: e => e.target.setStyle({ weight: 2.5, fillOpacity: 0.18 }),
-          mouseout:  e => e.target.setStyle({ weight: 1.5, fillOpacity: 0.08 })
-        });
-      }
+      interactive: false,
     }).addTo(map);
   }
 
