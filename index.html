@@ -1985,10 +1985,21 @@
   // The previously active type (set before entering map-click mode) is preserved.
   let mapClickTypeKey = null;
   map.on('click', (e) => {
-    if (!pinDropMode) return;
-    const tk = mapClickTypeKey || activeTypeKey || 'listing';
-    setPinDropMode(false);
-    openAddModal(tk, { lat: e.latlng.lat, lng: e.latlng.lng });
+    if (pinDropMode) {
+      const tk = mapClickTypeKey || activeTypeKey || 'listing';
+      setPinDropMode(false);
+      openAddModal(tk, { lat: e.latlng.lat, lng: e.latlng.lng });
+      return;
+    }
+    // Click on the map surface (not a marker, not a popup) closes any open
+    // marker popup. Leaflet's map.click only fires when the click hits the
+    // tile surface — clicks on markers / popups / clusters don't bubble here,
+    // so this stays safe for in-progress edits.
+    for (const key of Object.keys(markers)) {
+      for (const m of markers[key]) {
+        if (m.isPopupOpen && m.isPopupOpen()) m.closePopup();
+      }
+    }
   });
 
   // ─────────────────────────────────────────────────────────────────────────
