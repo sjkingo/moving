@@ -702,6 +702,7 @@
         { key: 'notes',   label: 'Notes',     kind: 'textarea',cssClass: 'notes',   placeholder: 'Add a note…' },
       ],
       addRequired: ['price', 'address'],
+      nameKey: 'address',
     },
     stay: {
       collection: 'stays',
@@ -714,6 +715,7 @@
         { key: 'notes',   label: 'Notes',     kind: 'textarea',cssClass: 'notes',   placeholder: 'Add a note…' },
       ],
       addRequired: ['name'],
+      nameKey: 'name',
     },
     school: {
       collection: 'schools',
@@ -728,6 +730,7 @@
         { key: 'notes',      label: 'Notes',      kind: 'textarea',cssClass: 'notes',   placeholder: 'Add a note…' },
       ],
       addRequired: ['name'],
+      nameKey: 'name',
     },
   };
 
@@ -905,6 +908,14 @@
     const icon = colorIcon(t.iconColor);
     items.forEach((item, i) => {
       const m = L.marker([item.lat, item.lng], { icon }).addTo(map);
+      // Hover tooltip — "Type: name". Falls back to address/name if the
+      // designated nameKey is empty on this doc.
+      const tooltipName = (item[t.nameKey] || item.name || item.address || '(unnamed)').trim();
+      m.bindTooltip(t.label + ': ' + tooltipName, {
+        direction: 'top',
+        offset: [0, -30],
+        opacity: 0.95,
+      });
       const popupEl = buildPopupNode(typeKey, item);
       // Disable Leaflet's auto-close so clicking outside or opening another
       // popup doesn't dismiss a popup with in-progress edits.
