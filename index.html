@@ -204,6 +204,8 @@
   .marker-cluster.cluster-yellow div { background: #f59e0b; }
   .marker-cluster.cluster-violet { background: rgba(139, 92, 246, 0.40); }
   .marker-cluster.cluster-violet div { background: #8b5cf6; }
+  .marker-cluster.cluster-grey   { background: rgba(75, 85, 99, 0.30); }
+  .marker-cluster.cluster-grey   div { background: #4b5563; }
 
   /* Ranked-listing map marker (Leaflet divIcon) */
   .rank-marker {
@@ -1026,9 +1028,9 @@
     for (const key of Object.keys(markers)) {
       markers[key] = [];
     }
-    // Clear cluster groups in one shot (faster than removing markers one-by-one).
-    if (typeof clusterGroups !== 'undefined') {
-      for (const g of Object.values(clusterGroups)) g.clearLayers();
+    // Clear cluster group in one shot (faster than removing markers one-by-one).
+    if (typeof clusterGroup !== 'undefined') {
+      clusterGroup.clearLayers();
     }
     // Tearing down markers also closes any open popup, but Leaflet doesn't
     // always fire popupclose for removed layers — reset the counter so we
@@ -1318,36 +1320,26 @@
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Marker clustering — one MarkerClusterGroup per type so clusters retain
-  // their type colour. Markers are added to the cluster group instead of
-  // directly to the map. At high zoom (or with few markers in view) the
-  // plugin shows individual markers; otherwise it groups them with a count.
+  // Marker clustering — a single shared MarkerClusterGroup. Markers from
+  // every type cluster together so genuinely-overlapping pins (e.g. a
+  // listing at the same town as a school) merge into one cluster rather
+  // than stacking. Cluster icon is neutral grey; expanding the cluster
+  // reveals the type-coloured individual pins.
   // ─────────────────────────────────────────────────────────────────────────
-  function makeClusterGroup(typeKey) {
-    const t = TYPES[typeKey];
-    const colorClass = 'cluster-' + t.iconColor;  // e.g. cluster-blue
-    return L.markerClusterGroup({
-      maxClusterRadius: 80,
-      showCoverageOnHover: false,
-      spiderfyOnMaxZoom: true,
-      iconCreateFunction: (cluster) => {
-        const count = cluster.getChildCount();
-        return L.divIcon({
-          html: '<div><span>' + count + '</span></div>',
-          className: 'marker-cluster ' + colorClass,
-          iconSize: L.point(40, 40),
-        });
-      },
-      // Z-index policy mirrors the per-marker policy: listings always on top.
-      zIndexOffset: typeKey === 'listing' ? 200 : 0,
-    });
-  }
-  const clusterGroups = {
-    listings: makeClusterGroup('listing'),
-    stays:    makeClusterGroup('stay'),
-    schools:  makeClusterGroup('school'),
-  };
-  for (const g of Object.values(clusterGroups)) g.addTo(map);
+  const clusterGroup = L.markerClusterGroup({
+    maxClusterRadius: 80,
+    showCoverageOnHover: false,
+    spiderfyOnMaxZoom: true,
+    iconCreateFunction: (cluster) => {
+      const count = cluster.getChildCount();
+      return L.divIcon({
+        html: '<div><span>' + count + '</span></div>',
+        className: 'marker-cluster cluster-grey',
+        iconSize: L.point(40, 40),
+      });
+    },
+  });
+  clusterGroup.addTo(map);
 
   // Render markers + sidebar for one type using the shared TYPES schema.
   function renderTypeMarkers(typeKey, items, bounds, opts = {}) {
@@ -1367,7 +1359,7 @@
         ? rankedListingIcon(listingPosition[item.id])
         : defaultIcon;
       const m = L.marker([item.lat, item.lng], { icon });
-      clusterGroups[t.collection].addLayer(m);
+      clusterGroup.addLayer(m);
       // Listings always sit above stays/schools so they're never obscured
       // when icons overlap at lower zoom levels. Hover bumps further to 1000.
       if (typeKey === 'listing') m.setZIndexOffset(200);
