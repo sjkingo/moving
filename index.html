@@ -7,6 +7,8 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
       crossorigin=""/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 <style>
   html, body { margin: 0; padding: 0; height: 100%; }
   #map { width: 100vw; height: 100vh; }
@@ -181,6 +183,27 @@
   #sidebar li.dragging { opacity: 0.5; }
   #sidebar li.drop-above { box-shadow: inset 0 2px 0 #1a73e8; }
   #sidebar li.drop-below { box-shadow: inset 0 -2px 0 #1a73e8; }
+
+  /* Cluster icons — coloured per type. Overrides the plugin's default
+     count-based colour bands. */
+  .marker-cluster {
+    background-clip: padding-box; border-radius: 20px;
+    text-align: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .marker-cluster div {
+    width: 30px; height: 30px; margin: 5px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 12px; font-weight: 700;
+    border: 2px solid white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  }
+  .marker-cluster.cluster-blue   { background: rgba(26, 115, 232, 0.35); }
+  .marker-cluster.cluster-blue   div { background: #1a73e8; }
+  .marker-cluster.cluster-yellow { background: rgba(245, 158, 11, 0.35); }
+  .marker-cluster.cluster-yellow div { background: #f59e0b; }
+  .marker-cluster.cluster-violet { background: rgba(139, 92, 246, 0.40); }
+  .marker-cluster.cluster-violet div { background: #8b5cf6; }
 
   /* Ranked-listing map marker (Leaflet divIcon) */
   .rank-marker {
@@ -501,6 +524,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
         crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
@@ -1000,8 +1024,11 @@
 
   function clearMarkers() {
     for (const key of Object.keys(markers)) {
-      markers[key].forEach(m => map.removeLayer(m));
       markers[key] = [];
+    }
+    // Clear cluster groups in one shot (faster than removing markers one-by-one).
+    if (typeof clusterGroups !== 'undefined') {
+      for (const g of Object.values(clusterGroups)) g.clearLayers();
     }
     // Tearing down markers also closes any open popup, but Leaflet doesn't
     // always fire popupclose for removed layers — reset the counter so we
@@ -1290,6 +1317,38 @@
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Marker clustering — one MarkerClusterGroup per type so clusters retain
+  // their type colour. Markers are added to the cluster group instead of
+  // directly to the map. At high zoom (or with few markers in view) the
+  // plugin shows individual markers; otherwise it groups them with a count.
+  // ─────────────────────────────────────────────────────────────────────────
+  function makeClusterGroup(typeKey) {
+    const t = TYPES[typeKey];
+    const colorClass = 'cluster-' + t.iconColor;  // e.g. cluster-blue
+    return L.markerClusterGroup({
+      maxClusterRadius: 80,
+      showCoverageOnHover: false,
+      spiderfyOnMaxZoom: true,
+      iconCreateFunction: (cluster) => {
+        const count = cluster.getChildCount();
+        return L.divIcon({
+          html: '<div><span>' + count + '</span></div>',
+          className: 'marker-cluster ' + colorClass,
+          iconSize: L.point(40, 40),
+        });
+      },
+      // Z-index policy mirrors the per-marker policy: listings always on top.
+      zIndexOffset: typeKey === 'listing' ? 200 : 0,
+    });
+  }
+  const clusterGroups = {
+    listings: makeClusterGroup('listing'),
+    stays:    makeClusterGroup('stay'),
+    schools:  makeClusterGroup('school'),
+  };
+  for (const g of Object.values(clusterGroups)) g.addTo(map);
+
   // Render markers + sidebar for one type using the shared TYPES schema.
   function renderTypeMarkers(typeKey, items, bounds, opts = {}) {
     const t = TYPES[typeKey];
@@ -1307,7 +1366,8 @@
       const icon = (typeKey === 'listing')
         ? rankedListingIcon(listingPosition[item.id])
         : defaultIcon;
-      const m = L.marker([item.lat, item.lng], { icon }).addTo(map);
+      const m = L.marker([item.lat, item.lng], { icon });
+      clusterGroups[t.collection].addLayer(m);
       // Listings always sit above stays/schools so they're never obscured
       // when icons overlap at lower zoom levels. Hover bumps further to 1000.
       if (typeKey === 'listing') m.setZIndexOffset(200);
