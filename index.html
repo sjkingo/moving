@@ -329,31 +329,86 @@
   .listing-popup .pin-actions button.danger:hover { background: #fee2e2; }
 
   /* Pin drop modal */
-  #pin-modal-backdrop, #delete-modal-backdrop {
+  #pin-modal-backdrop, #delete-modal-backdrop, #attach-school-backdrop {
     position: fixed; inset: 0; z-index: 1500;
     background: rgba(0,0,0,0.3); display: none;
     align-items: center; justify-content: center;
   }
-  #pin-modal, #delete-modal {
+  #pin-modal, #delete-modal, #attach-school-modal {
     background: white; padding: 20px 24px; border-radius: 8px;
     box-shadow: 0 4px 16px rgba(0,0,0,0.2); width: 320px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
-  #pin-modal h3, #delete-modal h3 { margin: 0 0 12px 0; font-size: 16px; }
-  #pin-modal label, #delete-modal label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; margin-top: 10px; font-weight: 500; }
-  #pin-modal input, #pin-modal textarea, #delete-modal input, #delete-modal textarea {
+  #attach-school-modal { width: 400px; max-height: 80vh; display: flex; flex-direction: column; }
+  #pin-modal h3, #delete-modal h3, #attach-school-modal h3 { margin: 0 0 12px 0; font-size: 16px; }
+  #pin-modal label, #delete-modal label, #attach-school-modal label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; margin-top: 10px; font-weight: 500; }
+  #pin-modal input, #pin-modal textarea, #delete-modal input, #delete-modal textarea,
+  #attach-school-modal input[type="text"] {
     width: 100%; box-sizing: border-box; padding: 6px 8px;
     border: 1px solid #ddd; border-radius: 4px; font-family: inherit; font-size: 13px;
   }
   #pin-modal textarea, #delete-modal textarea { min-height: 70px; resize: vertical; }
-  #pin-modal .actions, #delete-modal .actions { margin-top: 14px; display: flex; gap: 8px; justify-content: flex-end; }
-  #pin-modal button, #delete-modal button { padding: 7px 14px; font-size: 13px; border-radius: 4px; cursor: pointer; border: none; }
+  #pin-modal .actions, #delete-modal .actions, #attach-school-modal .actions { margin-top: 14px; display: flex; gap: 8px; justify-content: flex-end; }
+  #pin-modal button, #delete-modal button, #attach-school-modal button { padding: 7px 14px; font-size: 13px; border-radius: 4px; cursor: pointer; border: none; }
   #pin-modal button.primary, #delete-modal button.primary { background: #1a73e8; color: white; }
   #pin-modal button.primary:disabled { background: #93b8ec; cursor: not-allowed; }
-  #pin-modal button.cancel, #delete-modal button.cancel { background: #e5e7eb; color: #374151; }
+  #pin-modal button.cancel, #delete-modal button.cancel, #attach-school-modal button.cancel { background: #e5e7eb; color: #374151; }
   #delete-modal button.danger { background: #b91c1c; color: white; }
   #delete-modal button.danger:hover { background: #991b1b; }
-  #delete-modal p.lead { margin: 0 0 4px 0; font-size: 13px; color: #444; }
+  #delete-modal p.lead, #attach-school-modal p.lead { margin: 0 0 4px 0; font-size: 13px; color: #444; }
+
+  /* Attach school picker */
+  #attach-school-modal .filter-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: #555; }
+  #attach-school-modal .filter-row input[type="checkbox"] { margin: 0; }
+  #attach-school-results {
+    list-style: none; margin: 10px 0 0 0; padding: 0;
+    flex: 1; overflow-y: auto;
+    border: 1px solid #eee; border-radius: 4px;
+  }
+  #attach-school-results li {
+    display: flex; gap: 8px; align-items: center;
+    padding: 8px 10px; border-bottom: 1px solid #f3f4f6; font-size: 13px;
+  }
+  #attach-school-results li:last-child { border-bottom: none; }
+  #attach-school-results .info { flex: 1; min-width: 0; line-height: 1.35; }
+  #attach-school-results .name { font-weight: 500; color: #222; }
+  #attach-school-results .meta { font-size: 11px; color: #888; }
+  #attach-school-results .empty { padding: 16px; text-align: center; color: #888; }
+  #attach-school-results button.row-btn {
+    padding: 4px 10px; font-size: 12px; border-radius: 4px; cursor: pointer; border: none;
+    background: #1a73e8; color: white;
+  }
+  #attach-school-results button.row-btn.detach { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+  #attach-school-results button.row-btn.detach:hover { background: #fee2e2; }
+
+  /* Listing popup — Schools section */
+  .listing-popup .schools-section { margin-top: 10px; border-top: 1px solid #eee; padding-top: 8px; }
+  .listing-popup .schools-header { font-size: 12px; color: #666; font-weight: 500; margin-bottom: 6px; }
+  .listing-popup .schools-list { list-style: none; margin: 0 0 6px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .listing-popup .schools-list li {
+    display: flex; align-items: center; gap: 8px;
+    background: #f9fafb; border: 1px solid #eef0f3; border-radius: 4px;
+    padding: 5px 8px; font-size: 12px; line-height: 1.35;
+  }
+  .listing-popup .schools-list .school-info { flex: 1; min-width: 0; }
+  .listing-popup .schools-list .school-name {
+    font-weight: 500; color: #1a73e8; cursor: pointer; text-decoration: none;
+  }
+  .listing-popup .schools-list .school-name:hover { text-decoration: underline; }
+  .listing-popup .schools-list .school-name.missing { color: #999; cursor: default; font-style: italic; }
+  .listing-popup .schools-list .school-curriculum { color: #888; font-size: 11px; }
+  .listing-popup .schools-list .school-dist { color: #555; font-size: 11px; }
+  .listing-popup .schools-list .school-dist.warn { color: #b45309; }
+  .listing-popup .schools-list button.detach-school {
+    background: transparent; border: none; color: #999; cursor: pointer;
+    font-size: 14px; line-height: 1; padding: 2px 4px;
+  }
+  .listing-popup .schools-list button.detach-school:hover { color: #b91c1c; }
+  .listing-popup .attach-school-btn {
+    background: #f3f4f6; border: 1px dashed #d1d5db; color: #374151;
+    padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; width: 100%;
+  }
+  .listing-popup .attach-school-btn:hover { background: #e5e7eb; }
   #pin-search-status { font-size: 12px; color: #888; margin-top: 4px; min-height: 16px; }
   #pin-search-results {
     list-style: none; margin: 6px 0 0 0; padding: 0;
@@ -533,6 +588,19 @@
   </div>
 </div>
 
+<div id="attach-school-backdrop">
+  <div id="attach-school-modal">
+    <h3>Attach school</h3>
+    <p class="lead" id="attach-school-target"></p>
+    <input id="attach-school-search" type="text" placeholder="Search by name or address" autocomplete="off">
+    <label class="filter-row"><input type="checkbox" id="attach-school-nearby" checked> Within 100 km only</label>
+    <ul id="attach-school-results"></ul>
+    <div class="actions">
+      <button class="cancel" id="attach-school-cancel">Close</button>
+    </div>
+  </div>
+</div>
+
 <div id="activity-panel">
   <div class="activity-header">
     <div class="activity-tabs">
@@ -663,6 +731,34 @@
   const listingId = (l) => slugify(l.address);
   const stayId    = (s) => slugify(s.name);
   const schoolId  = (s) => slugify(s.name);
+
+  // Great-circle distance in km between {lat,lng} points.
+  function haversineKm(a, b) {
+    const R = 6371;
+    const toRad = d => d * Math.PI / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
+    const h = Math.sin(dLat / 2) ** 2 +
+              Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+
+  // Driving distance + duration via the public OSRM router. Returns
+  // { driveKm, driveMin } or throws. We persist the result on the link, so
+  // there's intentionally no client-side cache here.
+  async function fetchDrivingDistance(from, to) {
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('OSRM ' + r.status);
+    const data = await r.json();
+    const route = data.routes && data.routes[0];
+    if (!route) throw new Error('no route');
+    return {
+      driveKm:  +(route.distance / 1000).toFixed(1),
+      driveMin: Math.round(route.duration / 60),
+    };
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // DOM refs
@@ -877,6 +973,168 @@
       ta.addEventListener('keydown', onKey);
       bd.addEventListener('click', onBackdrop);
     });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Listing ↔ school relationships
+  //
+  //   The link lives as an `attachedSchools` array on each listing doc.
+  //   Each entry: { id, crowKm, driveKm, driveMin, attachedAt }.
+  //   Distances are computed once at attach time and never refetched.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  function getAttachedSchools(listingId) {
+    const l = state.listings.find(x => x.id === listingId);
+    return (l && Array.isArray(l.attachedSchools)) ? l.attachedSchools : [];
+  }
+
+  async function attachSchool(listing, school) {
+    const crowKm = +haversineKm(listing, school).toFixed(1);
+    let driveKm = null, driveMin = null, driveError = false;
+    try {
+      const d = await fetchDrivingDistance(listing, school);
+      driveKm = d.driveKm;
+      driveMin = d.driveMin;
+    } catch (e) {
+      console.warn('OSRM fetch failed:', e.message);
+      driveError = true;
+    }
+    const entry = {
+      id: school.id,
+      crowKm,
+      driveKm,
+      driveMin,
+      attachedAt: new Date().toISOString(),
+    };
+    if (driveError) entry.driveError = true;
+    const current = getAttachedSchools(listing.id).filter(a => a.id !== school.id);
+    current.push(entry);
+    await updateDoc(doc(db, 'listings', listing.id), {
+      attachedSchools: current,
+      updatedAt: serverTimestamp(),
+    });
+    logEvent('attach-school', 'listings', listing.id, listing.address || listing.name || '', undefined, school.name || school.id);
+  }
+
+  async function detachSchool(listingId, schoolId, schoolDisplayName) {
+    const listing = state.listings.find(x => x.id === listingId);
+    if (!listing) return;
+    const next = getAttachedSchools(listingId).filter(a => a.id !== schoolId);
+    await updateDoc(doc(db, 'listings', listingId), {
+      attachedSchools: next,
+      updatedAt: serverTimestamp(),
+    });
+    logEvent('detach-school', 'listings', listingId, listing.address || listing.name || '', undefined, schoolDisplayName || schoolId);
+  }
+
+  function openAttachSchoolModal(listing) {
+    const bd     = document.getElementById('attach-school-backdrop');
+    const tgt    = document.getElementById('attach-school-target');
+    const search = document.getElementById('attach-school-search');
+    const nearby = document.getElementById('attach-school-nearby');
+    const list   = document.getElementById('attach-school-results');
+    const btnC   = document.getElementById('attach-school-cancel');
+
+    tgt.textContent = listing.address || listing.name || '(listing)';
+    search.value = '';
+    nearby.checked = true;
+    bd.style.display = 'flex';
+    setTimeout(() => search.focus(), 0);
+
+    function close() {
+      bd.style.display = 'none';
+      search.removeEventListener('input', renderList);
+      nearby.removeEventListener('change', renderList);
+      btnC.removeEventListener('click', close);
+      bd.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+    }
+    function onBackdrop(e) { if (e.target === bd) close(); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+
+    function renderList() {
+      const q = search.value.trim().toLowerCase();
+      const limitNearby = nearby.checked;
+      const attached = getAttachedSchools(listing.id);
+      const attachedById = new Map(attached.map(a => [a.id, a]));
+      const rows = state.schools
+        .map(s => ({ school: s, crowKm: haversineKm(listing, s) }))
+        .filter(({ school, crowKm }) => {
+          if (limitNearby && crowKm > 100) return false;
+          if (!q) return true;
+          const hay = ((school.name || '') + ' ' + (school.address || '')).toLowerCase();
+          return hay.includes(q);
+        })
+        .sort((a, b) => a.crowKm - b.crowKm);
+
+      list.innerHTML = '';
+      if (rows.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'empty';
+        li.textContent = limitNearby ? 'No schools within 100 km. Try the toggle.' : 'No schools match.';
+        list.appendChild(li);
+        return;
+      }
+      for (const { school, crowKm } of rows) {
+        const li = document.createElement('li');
+        const info = document.createElement('div');
+        info.className = 'info';
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'name';
+        nameDiv.textContent = school.name || '(unnamed)';
+        const metaDiv = document.createElement('div');
+        metaDiv.className = 'meta';
+        const bits = [];
+        if (school.curriculum) bits.push(school.curriculum);
+        if (school.address)    bits.push(school.address);
+        bits.push('📏 ' + crowKm.toFixed(1) + ' km');
+        metaDiv.textContent = bits.join(' · ');
+        info.appendChild(nameDiv);
+        info.appendChild(metaDiv);
+        li.appendChild(info);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'row-btn';
+        const isAttached = attachedById.has(school.id);
+        if (isAttached) {
+          btn.classList.add('detach');
+          btn.textContent = 'Detach';
+          btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            try {
+              await detachSchool(listing.id, school.id, school.name);
+            } catch (e) {
+              console.error('detach failed', e);
+              alert('Detach failed: ' + (e.code || e.message));
+            }
+            renderList();
+          });
+        } else {
+          btn.textContent = 'Attach';
+          btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            btn.textContent = '…';
+            try {
+              await attachSchool(listing, school);
+            } catch (e) {
+              console.error('attach failed', e);
+              alert('Attach failed: ' + (e.code || e.message));
+            }
+            renderList();
+          });
+        }
+        li.appendChild(btn);
+        list.appendChild(li);
+      }
+    }
+
+    search.addEventListener('input', renderList);
+    nearby.addEventListener('change', renderList);
+    btnC.addEventListener('click', close);
+    bd.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+    renderList();
   }
 
   // Coalesce edit events for the same (coll, docId, field). Multiple typing
@@ -1292,6 +1550,93 @@
     return wrap;
   }
 
+  // Render the attached-schools chip list inside a listing popup.
+  // Pulls live school data from state.schools on every render so name/address
+  // edits surface automatically.
+  function renderSchoolsList(ul, listingId) {
+    ul.innerHTML = '';
+    const attached = getAttachedSchools(listingId);
+    if (attached.length === 0) {
+      const li = document.createElement('li');
+      li.style.background = 'transparent';
+      li.style.border = 'none';
+      li.style.color = '#888';
+      li.style.padding = '2px 0';
+      li.textContent = 'No schools attached yet.';
+      ul.appendChild(li);
+      return;
+    }
+    for (const att of attached) {
+      const li = document.createElement('li');
+      const info = document.createElement('div');
+      info.className = 'school-info';
+      const school = state.schools.find(s => s.id === att.id);
+
+      const nameEl = document.createElement(school ? 'a' : 'span');
+      nameEl.className = 'school-name' + (school ? '' : ' missing');
+      nameEl.textContent = school ? (school.name || '(unnamed)') : ('(school deleted)');
+      if (school) {
+        nameEl.href = '#';
+        nameEl.addEventListener('click', (e) => {
+          e.preventDefault();
+          const sm = markers.schools.find(m => {
+            const ll = m.getLatLng();
+            return ll.lat === school.lat && ll.lng === school.lng;
+          });
+          if (sm) {
+            map.setView([school.lat, school.lng], Math.max(map.getZoom(), 12));
+            sm.openPopup();
+          }
+        });
+      }
+      info.appendChild(nameEl);
+
+      const curr = school && school.curriculum;
+      if (curr) {
+        const c = document.createElement('span');
+        c.className = 'school-curriculum';
+        c.textContent = ' · ' + curr;
+        info.appendChild(c);
+      }
+
+      const dist = document.createElement('div');
+      dist.className = 'school-dist';
+      const distBits = [];
+      if (att.driveKm != null && att.driveMin != null) {
+        distBits.push('🚗 ' + att.driveMin + 'm · ' + att.driveKm + ' km');
+      }
+      if (att.crowKm != null) {
+        distBits.push('📏 ' + att.crowKm + ' km');
+      }
+      if (att.driveError && (att.driveKm == null)) {
+        dist.classList.add('warn');
+        distBits.push('(driving distance unavailable)');
+      }
+      dist.textContent = distBits.join('  ·  ');
+      info.appendChild(dist);
+
+      li.appendChild(info);
+
+      const detachBtn = document.createElement('button');
+      detachBtn.type = 'button';
+      detachBtn.className = 'detach-school';
+      detachBtn.textContent = '✕';
+      detachBtn.title = 'Detach';
+      detachBtn.addEventListener('click', async () => {
+        detachBtn.disabled = true;
+        try {
+          await detachSchool(listingId, att.id, school ? school.name : att.id);
+        } catch (e) {
+          console.error('detach failed', e);
+          alert('Detach failed: ' + (e.code || e.message));
+        }
+      });
+      li.appendChild(detachBtn);
+
+      ul.appendChild(li);
+    }
+  }
+
   // Build the entire popup DOM for a doc of a given type
   function buildPopupNode(typeKey, item) {
     const t = TYPES[typeKey];
@@ -1312,6 +1657,24 @@
 
     for (const f of t.fields) {
       body.appendChild(buildFieldNode(f, item[f.key]));
+    }
+
+    if (typeKey === 'listing') {
+      const section = document.createElement('div');
+      section.className = 'schools-section';
+      const hdr = document.createElement('div');
+      hdr.className = 'schools-header';
+      hdr.textContent = 'Schools';
+      const ul  = document.createElement('ul');
+      ul.className = 'schools-list';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'attach-school-btn';
+      btn.textContent = '+ Attach school';
+      section.appendChild(hdr);
+      section.appendChild(ul);
+      section.appendChild(btn);
+      body.appendChild(section);
     }
 
     // Actions row — Close (left) + Delete (right)
@@ -1342,6 +1705,18 @@
         bindFieldEditor(input, status, t.collection, id, input.dataset.key);
       }
     });
+
+    if (typeKey === 'listing') {
+      const ul     = popupNode.querySelector('.schools-list');
+      const attach = popupNode.querySelector('.attach-school-btn');
+      if (ul) renderSchoolsList(ul, id);
+      if (attach) {
+        attach.addEventListener('click', () => {
+          const listing = state.listings.find(x => x.id === id);
+          if (listing) openAttachSchoolModal(listing);
+        });
+      }
+    }
 
     // Dismiss handlers — close cleanly. Field auto-save already triggers
     // on blur, so closing the popup also flushes any pending edits.
@@ -1464,10 +1839,18 @@
         }
         openPopupCount++;
         attachPopupHandlers(popupEl, typeKey, item.id, m);
+        if (typeKey === 'listing') {
+          openListingPopup = { id: item.id, popupEl };
+          drawListingSchoolLines(item.id);
+        }
         if (opts.onPopupOpen) opts.onPopupOpen(item, i);
       });
       m.on('popupclose', () => {
         openPopupCount = Math.max(0, openPopupCount - 1);
+        if (typeKey === 'listing' && openListingPopup && openListingPopup.id === item.id) {
+          openListingPopup = null;
+          clearListingSchoolLines();
+        }
         if (opts.onPopupClose) opts.onPopupClose(item, i);
         // If a snapshot landed while the popup was open, render now.
         if (openPopupCount === 0 && renderDeferred) render();
@@ -1492,6 +1875,41 @@
   // render runs the moment the popup closes.
   let openPopupCount = 0;
   let renderDeferred = false;
+
+  // Tracks which listing popup (if any) is currently open. Used so that
+  // snapshot updates can refresh the in-popup schools list without rebuilding
+  // the whole map.
+  let openListingPopup = null;       // { id, popupEl } | null
+  let activeLinkLines  = [];          // L.polyline[]  — dashed listing↔school links
+
+  function drawListingSchoolLines(listingId) {
+    clearListingSchoolLines();
+    const l = state.listings.find(x => x.id === listingId);
+    if (!l) return;
+    const attached = getAttachedSchools(listingId);
+    for (const att of attached) {
+      const s = state.schools.find(sc => sc.id === att.id);
+      if (!s) continue;
+      const line = L.polyline(
+        [[l.lat, l.lng], [s.lat, s.lng]],
+        { color: '#1a73e8', weight: 2, opacity: 0.6, dashArray: '4 4', interactive: false }
+      );
+      line.addTo(map);
+      activeLinkLines.push(line);
+    }
+  }
+  function clearListingSchoolLines() {
+    for (const line of activeLinkLines) map.removeLayer(line);
+    activeLinkLines = [];
+  }
+  // Refresh the open listing popup's schools section after a snapshot. Cheap
+  // DOM rewrite vs. full render(), and bypasses the openPopupCount guard.
+  function refreshOpenListingPopup() {
+    if (!openListingPopup) return;
+    const ul = openListingPopup.popupEl.querySelector('.schools-list');
+    if (ul) renderSchoolsList(ul, openListingPopup.id);
+    drawListingSchoolLines(openListingPopup.id);
+  }
 
   function render() {
     if (openPopupCount > 0) {
@@ -1678,6 +2096,8 @@
         restore:    '↩️',
         rank:       '↕️',
         'rank-reset': '↻',
+        'attach-school': '🎓',
+        'detach-school': '🚫',
       })[ev.action] || '·';
       const who = (ev.by || 'unknown').split('@')[0];
       const tk = typeForCollection(ev.collection);
@@ -1705,6 +2125,12 @@
           break;
         case 'rank-reset':
           phrase = 'cleared rankings (' + escapeHtml(target) + ')';
+          break;
+        case 'attach-school':
+          phrase = 'attached <span class="ev-value">' + escapeHtml(String(ev.newValue || '')) + '</span> to <span class="ev-target">' + escapeHtml(target) + '</span>';
+          break;
+        case 'detach-school':
+          phrase = 'detached <span class="ev-value">' + escapeHtml(String(ev.newValue || '')) + '</span> from <span class="ev-target">' + escapeHtml(target) + '</span>';
           break;
         default:
           phrase = escapeHtml(ev.action) + ' on ' + escapeHtml(target);
@@ -1844,6 +2270,9 @@ document.getElementById('sidebar-toggle').addEventListener('click', () => {
           if (stateKey === 'listings') items = sortListingsByRank(items);
           state[stateKey] = items;
           render();
+          if (stateKey === 'listings' || stateKey === 'schools') {
+            refreshOpenListingPopup();
+          }
         },
         err => console.error(coll + ' listener:', err)
       ));
