@@ -425,16 +425,16 @@
   #activity-panel #history-list .ev-who   { color: #1a73e8; }
   #activity-panel #history-list .ev-value { color: #374151; background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
   #activity-panel #history-list .ev-target { font-weight: 500; }
-  #activity-panel #history-list li.with-thumb { display: flex; gap: 10px; align-items: flex-start; }
-  #activity-panel #history-list li.with-thumb .ev-body { flex: 1; min-width: 0; }
-  #activity-panel #history-list .ev-thumb {
-    width: 40px; height: 32px; border-radius: 3px; object-fit: cover;
-    flex-shrink: 0; background: #e5e7eb; margin-top: 1px;
+  #activity-panel #trash-list li.with-thumb { display: flex; gap: 10px; align-items: flex-start; }
+  #activity-panel #trash-list li.with-thumb .trash-body { flex: 1; min-width: 0; }
+  #activity-panel #trash-list .trash-thumb {
+    width: 20px; height: 16px; border-radius: 2px; object-fit: cover;
+    flex-shrink: 0; background: #e5e7eb; margin-top: 2px;
   }
-  #activity-panel #history-list .ev-thumb.placeholder {
-    background: repeating-linear-gradient(45deg, #f3f4f6, #f3f4f6 4px, #e5e7eb 4px, #e5e7eb 8px);
+  #activity-panel #trash-list .trash-thumb.placeholder {
+    background: repeating-linear-gradient(45deg, #f3f4f6, #f3f4f6 3px, #e5e7eb 3px, #e5e7eb 6px);
   }
-  #activity-panel #history-list .ev-reason {
+  #activity-panel #trash-list .trash-reason {
     color: #6b7280; font-style: italic; font-size: 12px; margin-top: 2px;
   }
 </style>
@@ -1625,10 +1625,22 @@
       const t = TYPES[d._type];
       const primaryKey = t.fields[0].key === 'photo' ? t.fields[1].key : t.fields[0].key;
       const displayName = d[primaryKey] || d.address || d.name || '(untitled)';
+      const photo = d.photo || d.deletedPhoto || '';
+      const thumbHtml = photo
+        ? '<img class="trash-thumb" src="' + escapeHtml(photo) + '" alt="" onerror="this.classList.add(\'placeholder\'); this.removeAttribute(\'src\');">'
+        : '<div class="trash-thumb placeholder"></div>';
+      const reasonHtml = d.deletedReason
+        ? '<div class="trash-reason">"' + escapeHtml(d.deletedReason) + '"</div>'
+        : '';
+      li.className = 'with-thumb';
       li.innerHTML =
-        '<div class="title">' + escapeHtml(t.label) + ' · ' + escapeHtml(displayName) + '</div>' +
-        '<div class="when">deleted ' + escapeHtml(when) + '</div>' +
-        '<button>Restore</button>';
+        thumbHtml +
+        '<div class="trash-body">' +
+          '<div class="title">' + escapeHtml(t.label) + ' · ' + escapeHtml(displayName) + '</div>' +
+          reasonHtml +
+          '<div class="when">deleted ' + escapeHtml(when) + '</div>' +
+          '<button>Restore</button>' +
+        '</div>';
       li.querySelector('button').addEventListener('click', async () => {
         try {
           await updateDoc(doc(db, t.collection, d.id), {
@@ -1698,30 +1710,11 @@
           phrase = escapeHtml(ev.action) + ' on ' + escapeHtml(target);
       }
       const when = ev.at && ev.at.toDate ? formatRelTime(ev.at.toDate()) : '…';
-      if (ev.action === 'delete') {
-        const thumbHtml = ev.photo
-          ? '<img class="ev-thumb" src="' + escapeHtml(ev.photo) + '" alt="" onerror="this.classList.add(\'placeholder\'); this.removeAttribute(\'src\');">'
-          : '<div class="ev-thumb placeholder"></div>';
-        const reasonHtml = ev.reason
-          ? '<div class="ev-reason">"' + escapeHtml(ev.reason) + '"</div>'
-          : '';
-        li.className = 'with-thumb';
-        li.innerHTML =
-          thumbHtml +
-          '<div class="ev-body">' +
-            '<div><span class="ev-icon">' + icon + '</span>' +
-            '<span class="ev-who">' + escapeHtml(who) + '</span> ' +
-            phrase + '</div>' +
-            reasonHtml +
-            '<div class="when">' + escapeHtml(when) + '</div>' +
-          '</div>';
-      } else {
-        li.innerHTML =
-          '<div><span class="ev-icon">' + icon + '</span>' +
-          '<span class="ev-who">' + escapeHtml(who) + '</span> ' +
-          phrase + '</div>' +
-          '<div class="when">' + escapeHtml(when) + '</div>';
-      }
+      li.innerHTML =
+        '<div><span class="ev-icon">' + icon + '</span>' +
+        '<span class="ev-who">' + escapeHtml(who) + '</span> ' +
+        phrase + '</div>' +
+        '<div class="when">' + escapeHtml(when) + '</div>';
       historyList.appendChild(li);
     }
   }
