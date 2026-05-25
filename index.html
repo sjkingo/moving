@@ -1603,10 +1603,10 @@
       dist.className = 'school-dist';
       const distBits = [];
       if (att.driveKm != null && att.driveMin != null) {
-        distBits.push('🚗 ' + att.driveMin + 'm · ' + att.driveKm + ' km');
+        distBits.push('🚗 ' + att.driveMin + ' min drive · ' + att.driveKm + ' km');
       }
       if (att.crowKm != null) {
-        distBits.push('📏 ' + att.crowKm + ' km');
+        distBits.push('📏 ' + att.crowKm + ' km direct');
       }
       if (att.driveError && (att.driveKm == null)) {
         dist.classList.add('warn');
@@ -1841,7 +1841,6 @@
         attachPopupHandlers(popupEl, typeKey, item.id, m);
         if (typeKey === 'listing') {
           openListingPopup = { id: item.id, popupEl };
-          drawListingSchoolLines(item.id);
         }
         if (opts.onPopupOpen) opts.onPopupOpen(item, i);
       });
@@ -1849,7 +1848,6 @@
         openPopupCount = Math.max(0, openPopupCount - 1);
         if (typeKey === 'listing' && openListingPopup && openListingPopup.id === item.id) {
           openListingPopup = null;
-          clearListingSchoolLines();
         }
         if (opts.onPopupClose) opts.onPopupClose(item, i);
         // If a snapshot landed while the popup was open, render now.
@@ -1882,33 +1880,34 @@
   let openListingPopup = null;       // { id, popupEl } | null
   let activeLinkLines  = [];          // L.polyline[]  — dashed listing↔school links
 
-  function drawListingSchoolLines(listingId) {
-    clearListingSchoolLines();
-    const l = state.listings.find(x => x.id === listingId);
-    if (!l) return;
-    const attached = getAttachedSchools(listingId);
-    for (const att of attached) {
-      const s = state.schools.find(sc => sc.id === att.id);
-      if (!s) continue;
-      const line = L.polyline(
-        [[l.lat, l.lng], [s.lat, s.lng]],
-        { color: '#1a73e8', weight: 2, opacity: 0.6, dashArray: '4 4', interactive: false }
-      );
-      line.addTo(map);
-      activeLinkLines.push(line);
-    }
-  }
-  function clearListingSchoolLines() {
+  // Always-on rendering of every listing↔attached-school link on the map.
+  // Rebuilt whenever the listings or schools snapshot lands.
+  function redrawAllSchoolLines() {
     for (const line of activeLinkLines) map.removeLayer(line);
     activeLinkLines = [];
+    for (const l of state.listings) {
+      const attached = Array.isArray(l.attachedSchools) ? l.attachedSchools : [];
+      for (const att of attached) {
+        const s = state.schools.find(sc => sc.id === att.id);
+        if (!s) continue;
+        const line = L.polyline(
+          [[l.lat, l.lng], [s.lat, s.lng]],
+          { color: '#1a73e8', weight: 2, opacity: 0.6, dashArray: '4 4', interactive: false }
+        );
+        line.addTo(map);
+        activeLinkLines.push(line);
+      }
+    }
   }
   // Refresh the open listing popup's schools section after a snapshot. Cheap
   // DOM rewrite vs. full render(), and bypasses the openPopupCount guard.
+  // Also redraws polylines so attach/detach is visible immediately even when
+  // render() is deferred by the open popup.
   function refreshOpenListingPopup() {
+    redrawAllSchoolLines();
     if (!openListingPopup) return;
     const ul = openListingPopup.popupEl.querySelector('.schools-list');
     if (ul) renderSchoolsList(ul, openListingPopup.id);
-    drawListingSchoolLines(openListingPopup.id);
   }
 
   function render() {
@@ -2023,6 +2022,7 @@
 
     renderProvinceOverlay();
     renderTrashPanel();
+    redrawAllSchoolLines();
   }
 
   function renderTrashPanel() {
