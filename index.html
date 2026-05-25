@@ -151,7 +151,6 @@
   #sidebar.collapsed h2 { border-radius: 6px; }
   #sidebar.collapsed h2 .chev { transform: rotate(-90deg); }
   #sidebar.collapsed ul { display: none; }
-  #sidebar .dist { color: #1a73e8; font-size: 12px; font-weight: 500; margin-bottom: 2px; }
   #sidebar ul { list-style: none; margin: 0; padding: 0; }
   #sidebar li {
     padding: 8px 84px 8px 30px; border-bottom: 1px solid #eee;
@@ -330,28 +329,31 @@
   .listing-popup .pin-actions button.danger:hover { background: #fee2e2; }
 
   /* Pin drop modal */
-  #pin-modal-backdrop {
+  #pin-modal-backdrop, #delete-modal-backdrop {
     position: fixed; inset: 0; z-index: 1500;
     background: rgba(0,0,0,0.3); display: none;
     align-items: center; justify-content: center;
   }
-  #pin-modal {
+  #pin-modal, #delete-modal {
     background: white; padding: 20px 24px; border-radius: 8px;
     box-shadow: 0 4px 16px rgba(0,0,0,0.2); width: 320px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
-  #pin-modal h3 { margin: 0 0 12px 0; font-size: 16px; }
-  #pin-modal label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; margin-top: 10px; font-weight: 500; }
-  #pin-modal input, #pin-modal textarea {
+  #pin-modal h3, #delete-modal h3 { margin: 0 0 12px 0; font-size: 16px; }
+  #pin-modal label, #delete-modal label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; margin-top: 10px; font-weight: 500; }
+  #pin-modal input, #pin-modal textarea, #delete-modal input, #delete-modal textarea {
     width: 100%; box-sizing: border-box; padding: 6px 8px;
     border: 1px solid #ddd; border-radius: 4px; font-family: inherit; font-size: 13px;
   }
-  #pin-modal textarea { min-height: 70px; resize: vertical; }
-  #pin-modal .actions { margin-top: 14px; display: flex; gap: 8px; justify-content: flex-end; }
-  #pin-modal button { padding: 7px 14px; font-size: 13px; border-radius: 4px; cursor: pointer; border: none; }
-  #pin-modal button.primary { background: #1a73e8; color: white; }
+  #pin-modal textarea, #delete-modal textarea { min-height: 70px; resize: vertical; }
+  #pin-modal .actions, #delete-modal .actions { margin-top: 14px; display: flex; gap: 8px; justify-content: flex-end; }
+  #pin-modal button, #delete-modal button { padding: 7px 14px; font-size: 13px; border-radius: 4px; cursor: pointer; border: none; }
+  #pin-modal button.primary, #delete-modal button.primary { background: #1a73e8; color: white; }
   #pin-modal button.primary:disabled { background: #93b8ec; cursor: not-allowed; }
-  #pin-modal button.cancel { background: #e5e7eb; color: #374151; }
+  #pin-modal button.cancel, #delete-modal button.cancel { background: #e5e7eb; color: #374151; }
+  #delete-modal button.danger { background: #b91c1c; color: white; }
+  #delete-modal button.danger:hover { background: #991b1b; }
+  #delete-modal p.lead { margin: 0 0 4px 0; font-size: 13px; color: #444; }
   #pin-search-status { font-size: 12px; color: #888; margin-top: 4px; min-height: 16px; }
   #pin-search-results {
     list-style: none; margin: 6px 0 0 0; padding: 0;
@@ -423,6 +425,18 @@
   #activity-panel #history-list .ev-who   { color: #1a73e8; }
   #activity-panel #history-list .ev-value { color: #374151; background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
   #activity-panel #history-list .ev-target { font-weight: 500; }
+  #activity-panel #history-list li.with-thumb { display: flex; gap: 10px; align-items: flex-start; }
+  #activity-panel #history-list li.with-thumb .ev-body { flex: 1; min-width: 0; }
+  #activity-panel #history-list .ev-thumb {
+    width: 40px; height: 32px; border-radius: 3px; object-fit: cover;
+    flex-shrink: 0; background: #e5e7eb; margin-top: 1px;
+  }
+  #activity-panel #history-list .ev-thumb.placeholder {
+    background: repeating-linear-gradient(45deg, #f3f4f6, #f3f4f6 4px, #e5e7eb 4px, #e5e7eb 8px);
+  }
+  #activity-panel #history-list .ev-reason {
+    color: #6b7280; font-style: italic; font-size: 12px; margin-top: 2px;
+  }
 </style>
 </head>
 <body>
@@ -502,6 +516,19 @@
     <div class="actions">
       <button class="cancel" id="pin-cancel">Cancel</button>
       <button class="primary" id="pin-save" disabled>Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="delete-modal-backdrop">
+  <div id="delete-modal">
+    <h3 id="delete-modal-title">Delete?</h3>
+    <p class="lead" id="delete-modal-target"></p>
+    <label for="delete-reason">Reason (optional)</label>
+    <textarea id="delete-reason" placeholder="e.g. already rented, too expensive, wrong town"></textarea>
+    <div class="actions">
+      <button class="cancel" id="delete-cancel">Cancel</button>
+      <button class="danger" id="delete-confirm">Delete</button>
     </div>
   </div>
 </div>
@@ -782,7 +809,7 @@
     return (item && (item[key] || item.address || item.name)) || '(unnamed)';
   }
 
-  function logEvent(action, coll, docId, displayName, field, newValue) {
+  function logEvent(action, coll, docId, displayName, field, newValue, extras) {
     // Trim very long values so events don't bloat
     let val = newValue;
     if (typeof val === 'string' && val.length > 200) val = val.slice(0, 197) + '…';
@@ -796,8 +823,59 @@
     };
     if (field !== undefined) payload.field = field;
     if (val !== undefined)   payload.newValue = val;
+    if (extras && typeof extras === 'object') {
+      if (extras.reason) {
+        let r = String(extras.reason);
+        if (r.length > 500) r = r.slice(0, 497) + '…';
+        payload.reason = r;
+      }
+      if (extras.photo) payload.photo = String(extras.photo);
+    }
     return addDoc(collection(db, 'events'), payload).catch(e => {
       console.warn('logEvent failed:', e.code || e.message);
+    });
+  }
+
+  // Custom delete confirmation with an optional reason. Returns a promise
+  // that resolves to { confirmed, reason }. Reason is trimmed; empty string
+  // means the user confirmed without giving a reason.
+  function askDeleteReason(typeLabel, displayName) {
+    return new Promise(resolve => {
+      const bd   = document.getElementById('delete-modal-backdrop');
+      const ttl  = document.getElementById('delete-modal-title');
+      const tgt  = document.getElementById('delete-modal-target');
+      const ta   = document.getElementById('delete-reason');
+      const btnC = document.getElementById('delete-cancel');
+      const btnD = document.getElementById('delete-confirm');
+      ttl.textContent = 'Delete this ' + typeLabel.toLowerCase() + '?';
+      tgt.textContent = displayName || '';
+      ta.value = '';
+      bd.style.display = 'flex';
+      setTimeout(() => ta.focus(), 0);
+
+      function cleanup() {
+        bd.style.display = 'none';
+        btnC.removeEventListener('click', onCancel);
+        btnD.removeEventListener('click', onDelete);
+        ta.removeEventListener('keydown', onKey);
+        bd.removeEventListener('click', onBackdrop);
+      }
+      function onCancel() { cleanup(); resolve({ confirmed: false, reason: '' }); }
+      function onDelete() {
+        const reason = ta.value.trim();
+        cleanup();
+        resolve({ confirmed: true, reason });
+      }
+      function onKey(e) {
+        if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+        else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onDelete(); }
+      }
+      function onBackdrop(e) { if (e.target === bd) onCancel(); }
+
+      btnC.addEventListener('click', onCancel);
+      btnD.addEventListener('click', onDelete);
+      ta.addEventListener('keydown', onKey);
+      bd.addEventListener('click', onBackdrop);
     });
   }
 
@@ -1037,29 +1115,7 @@
     openPopupCount = 0;
   }
 
-  // Driving-distance cache (per-browser localStorage, unchanged from before)
-  function airbnb() { return state.stays[0]; }
-  const cacheKey = (l) => airbnb()
-    ? 'dist:' + airbnb().lat + ',' + airbnb().lng + '->' + l.lat + ',' + l.lng
-    : null;
-  async function fetchDistance(l) {
-    const a = airbnb();
-    if (!a) return null;
-    const key = cacheKey(l);
-    const cached = localStorage.getItem(key);
-    if (cached) return JSON.parse(cached);
-    const url = `https://router.project-osrm.org/route/v1/driving/${a.lng},${a.lat};${l.lng},${l.lat}?overview=false`;
-    const r = await fetch(url);
-    if (!r.ok) throw new Error('OSRM ' + r.status);
-    const data = await r.json();
-    const route = data.routes && data.routes[0];
-    if (!route) throw new Error('no route');
-    const out = { km: route.distance / 1000, hours: route.duration / 3600 };
-    localStorage.setItem(key, JSON.stringify(out));
-    return out;
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
   // Schema per type:
   //   collection — Firestore collection name
   //   label      — singular human label ("Listing")
@@ -1298,18 +1354,23 @@
     const delBtn = popupNode.querySelector('.doc-delete');
     if (delBtn) {
       delBtn.addEventListener('click', async () => {
-        if (!confirm('Delete this ' + t.label.toLowerCase() + '? You can restore it from "Recently deleted".')) return;
+        // Resolve display name + photo BEFORE deletion (we'd lose it otherwise)
+        const list = state[t.collection] || [];
+        const item = list.find(x => x.id === id);
+        const name = item ? docDisplayName(typeKey, item) : id;
+        const photo = (item && item.photo) || null;
+        const { confirmed, reason } = await askDeleteReason(t.label, name);
+        if (!confirmed) return;
         try {
-          // Resolve display name BEFORE deletion (we'd lose it otherwise)
-          const list = state[t.collection] || [];
-          const item = list.find(x => x.id === id);
-          const name = item ? docDisplayName(typeKey, item) : id;
           await updateDoc(doc(db, t.collection, id), {
             deleted: true,
             deletedAt: serverTimestamp(),
+            deletedReason: reason || null,
+            deletedPhoto: photo,
+            deletedTitle: name,
             updatedAt: serverTimestamp(),
           });
-          logEvent('delete', t.collection, id, name);
+          logEvent('delete', t.collection, id, name, undefined, undefined, { reason, photo });
         } catch (e) {
           console.error('soft-delete failed', e);
           alert('Delete failed: ' + (e.code || e.message));
@@ -1469,7 +1530,6 @@
             (l.url ? ' <a class="loc-link" href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener" title="Open listing">🔗</a>' : '') +
           '</div>' +
           '<div class="meta">' + escapeHtml(l.price || '') + ' · ' + escapeHtml(l.beds || '') + '</div>' +
-          '<div class="dist" data-id="' + escapeHtml(l.id) + '">Driving distance: …</div>' +
           notePreview;
         li.addEventListener('click', (e) => {
           if (e.target.tagName === 'A') return;
@@ -1545,7 +1605,6 @@
 
     renderProvinceOverlay();
     renderTrashPanel();
-    refreshDistances();
   }
 
   function renderTrashPanel() {
@@ -1639,11 +1698,30 @@
           phrase = escapeHtml(ev.action) + ' on ' + escapeHtml(target);
       }
       const when = ev.at && ev.at.toDate ? formatRelTime(ev.at.toDate()) : '…';
-      li.innerHTML =
-        '<div><span class="ev-icon">' + icon + '</span>' +
-        '<span class="ev-who">' + escapeHtml(who) + '</span> ' +
-        phrase + '</div>' +
-        '<div class="when">' + escapeHtml(when) + '</div>';
+      if (ev.action === 'delete') {
+        const thumbHtml = ev.photo
+          ? '<img class="ev-thumb" src="' + escapeHtml(ev.photo) + '" alt="" onerror="this.classList.add(\'placeholder\'); this.removeAttribute(\'src\');">'
+          : '<div class="ev-thumb placeholder"></div>';
+        const reasonHtml = ev.reason
+          ? '<div class="ev-reason">"' + escapeHtml(ev.reason) + '"</div>'
+          : '';
+        li.className = 'with-thumb';
+        li.innerHTML =
+          thumbHtml +
+          '<div class="ev-body">' +
+            '<div><span class="ev-icon">' + icon + '</span>' +
+            '<span class="ev-who">' + escapeHtml(who) + '</span> ' +
+            phrase + '</div>' +
+            reasonHtml +
+            '<div class="when">' + escapeHtml(when) + '</div>' +
+          '</div>';
+      } else {
+        li.innerHTML =
+          '<div><span class="ev-icon">' + icon + '</span>' +
+          '<span class="ev-who">' + escapeHtml(who) + '</span> ' +
+          phrase + '</div>' +
+          '<div class="when">' + escapeHtml(when) + '</div>';
+      }
       historyList.appendChild(li);
     }
   }
@@ -1661,25 +1739,7 @@
     return d.toLocaleDateString();
   }
 
-  function refreshDistances() {
-    if (!airbnb()) return;
-    state.listings.forEach(l => {
-      fetchDistance(l).then(d => {
-        const el = document.querySelector('.dist[data-id="' + CSS.escape(l.id) + '"]');
-        if (!el || !d) return;
-        const km = Math.round(d.km);
-        const h = Math.floor(d.hours);
-        const mins = Math.round((d.hours - h) * 60);
-        const time = h > 0 ? `${h}h ${mins}m` : `${mins}m`;
-        el.textContent = `🚗 ${km} km · ${time} from airbnb`;
-      }).catch(() => {
-        const el = document.querySelector('.dist[data-id="' + CSS.escape(l.id) + '"]');
-        if (el) el.textContent = 'Driving distance: unavailable';
-      });
-    });
-  }
-
-  document.getElementById('sidebar-toggle').addEventListener('click', () => {
+document.getElementById('sidebar-toggle').addEventListener('click', () => {
     sidebarEl.classList.toggle('collapsed');
   });
 
