@@ -744,20 +744,44 @@
     return 2 * R * Math.asin(Math.sqrt(h));
   }
 
-  // Driving distance + duration via the public OSRM router. Returns
-  // { driveKm, driveMin } or throws. We persist the result on the link, so
-  // there's intentionally no client-side cache here.
+  // Driving distance + duration + route geometry via the public OSRM router.
+  // Returns { driveKm, driveMin, routePolyline } or throws. We persist the
+  // result on the link, so there's intentionally no client-side cache here.
+  // `geometries=polyline` returns Google-encoded polyline (1e5 precision) which
+  // is ~5x more compact than GeoJSON. `overview=simplified` drops redundant
+  // points (good enough for the zoom levels we use).
   async function fetchDrivingDistance(from, to) {
-    const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false`;
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?geometries=polyline&overview=simplified`;
     const r = await fetch(url);
     if (!r.ok) throw new Error('OSRM ' + r.status);
     const data = await r.json();
     const route = data.routes && data.routes[0];
     if (!route) throw new Error('no route');
     return {
-      driveKm:  +(route.distance / 1000).toFixed(1),
-      driveMin: Math.round(route.duration / 60),
+      driveKm:       +(route.distance / 1000).toFixed(1),
+      driveMin:      Math.round(route.duration / 60),
+      routePolyline: typeof route.geometry === 'string' ? route.geometry : null,
     };
+  }
+
+  // Decode a Google-encoded polyline (precision 1e5) into [[lat,lng], ...].
+  // Reference: https://developers.google.com/maps/documentation/utilities/polylinealgorithm
+  function decodePolyline(str) {
+    if (!str) return [];
+    const out = [];
+    let i = 0, lat = 0, lng = 0;
+    while (i < str.length) {
+      let b, shift = 0, result = 0;
+      do { b = str.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+      const dLat = (result & 1) ? ~(result >> 1) : (result >> 1);
+      lat += dLat;
+      shift = 0; result = 0;
+      do { b = str.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+      const dLng = (result & 1) ? ~(result >> 1) : (result >> 1);
+      lng += dLng;
+      out.push([lat / 1e5, lng / 1e5]);
+    }
+    return out;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -990,11 +1014,12 @@
 
   async function attachSchool(listing, school) {
     const crowKm = +haversineKm(listing, school).toFixed(1);
-    let driveKm = null, driveMin = null, driveError = false;
+    let driveKm = null, driveMin = null, routePolyline = null, driveError = false;
     try {
       const d = await fetchDrivingDistance(listing, school);
       driveKm = d.driveKm;
       driveMin = d.driveMin;
+      routePolyline = d.routePolyline;
     } catch (e) {
       console.warn('OSRM fetch failed:', e.message);
       driveError = true;
@@ -1004,6 +1029,7 @@
       crowKm,
       driveKm,
       driveMin,
+      routePolyline,
       attachedAt: new Date().toISOString(),
     };
     if (driveError) entry.driveError = true;
@@ -1881,7 +1907,8 @@
   let activeLinkLines  = [];          // L.polyline[]  — dashed listing↔school links
 
   // Always-on rendering of every listing↔attached-school link on the map.
-  // Rebuilt whenever the listings or schools snapshot lands.
+  // Rebuilt whenever the listings or schools snapshot lands. Uses the stored
+  // driving route polyline when present; falls back to a dashed straight line.
   function redrawAllSchoolLines() {
     for (const line of activeLinkLines) map.removeLayer(line);
     activeLinkLines = [];
@@ -1890,10 +1917,15 @@
       for (const att of attached) {
         const s = state.schools.find(sc => sc.id === att.id);
         if (!s) continue;
-        const line = L.polyline(
-          [[l.lat, l.lng], [s.lat, s.lng]],
-          { color: '#1a73e8', weight: 2, opacity: 0.6, dashArray: '4 4', interactive: false }
-        );
+        let coords = att.routePolyline ? decodePolyline(att.routePolyline) : null;
+        const opts = { color: '#1a73e8', weight: 3, opacity: 0.7, interactive: false };
+        if (!coords || coords.length < 2) {
+          coords = [[l.lat, l.lng], [s.lat, s.lng]];
+          opts.weight = 2;
+          opts.opacity = 0.6;
+          opts.dashArray = '4 4';
+        }
+        const line = L.polyline(coords, opts);
         line.addTo(map);
         activeLinkLines.push(line);
       }
